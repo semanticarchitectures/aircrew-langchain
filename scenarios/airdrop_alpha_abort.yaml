@@ -1,0 +1,22 @@
+# Operation AIRDROP ALPHA - abort variant
+#
+# Same mission, plus one event: on the run-in a restraint strap on bundle B-03
+# fails and the bundle shifts aft.  In the original this was a commented-out
+# narrative inject, so the tools still reported a healthy CG.  Here the event
+# carries an `effects` entry that changes the world, so inspect_cargo and
+# calculate_weight_balance report the shift and execute_airdrop refuses.
+
+extends: airdrop_alpha.yaml
+
+scenario:
+  name: Operation AIRDROP ALPHA (cargo shift on run-in)
+  extra_events:
+    - phase: dz_approach
+      at_time: 62
+      inject_to: LOADMASTER
+      priority: URGENT
+      effects:
+        - {name: cargo_shift, bundle: B-03, cg_shift_pct: 4.9}
+      message: >
+        You hear a loud bang from the aft cargo bay and feel the load move.
+        Inspect the cargo and take the action your procedures require.

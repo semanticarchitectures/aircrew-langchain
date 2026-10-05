@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "mission": "./src/airdrop_alpha/studio.py:make_graph"
+  },
+  "env": ".env"
+}

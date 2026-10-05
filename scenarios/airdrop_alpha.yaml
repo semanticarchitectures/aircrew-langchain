@@ -1,0 +1,201 @@
+# Operation AIRDROP ALPHA - scenario definition
+#
+# The scheduler node reads this file.  Times are scenario minutes.  Unlike the
+# original, nothing here fires on wall-clock time: the clock only advances when
+# the crew has finished talking, and any item with `requires` holds the whole
+# timeline (the aircraft waits on the ground or in a hold, burning fuel) until
+# those conditions are true in the world state.
+#
+# Times were re-based on the leg times in MISSION_BRIEF_ALPHA:
+#   takeoff 12, WPT ALPHA 30, WPT BRAVO 54, DZ-ALPHA 64, WPT CHARLIE 88, KIRO 110.
+#
+# Conditions usable in `requires` are listed in domain/world.py (CONDITIONS),
+# plus `checklist:<NAME>`.
+
+scenario:
+  name: Operation AIRDROP ALPHA
+  description: >
+    Single-leg airdrop mission. CONDOR 71 departs KIRO, delivers five
+    humanitarian supply bundles to DZ-ALPHA, and returns to KIRO.
+  aircraft_callsign: CONDOR 71
+  start_agent: COMMANDER
+  initial_trigger: >
+    Begin mission planning for Operation AIRDROP ALPHA. Review the mission
+    brief and brief the crew.
+  end_at: 114
+
+  settings:
+    hold_step_min: 2          # minutes the timeline slips each time a gate is unmet
+    max_holds: 5              # holds on one item before the run ends as "stalled"
+    max_turns: 400            # agent turns in the whole run
+    max_turns_per_burst: 40   # agent turns between two clock advances
+    max_model_calls_per_turn: 20
+    party_line: false         # true: crew overhear interphone traffic not addressed to them
+    memory_max_entries: 60    # mission-log entries each agent keeps
+
+  # What the aircraft does, and what must be true before it does it.
+  flight_profile:
+    - {at: 0,   flight_phase: ground}
+    - at: 12
+      flight_phase: takeoff
+      heading: 285
+      requires: [takeoff_clearance, "checklist:BEFORE TAKEOFF"]
+    - {at: 13,  flight_phase: climb}
+    - {at: 21,  flight_phase: cruise}
+    - {at: 54,  flight_phase: descent, heading: 295}
+    - at: 60
+      flight_phase: dz_approach
+      heading: 90
+      requires: [romeo4_clearance]
+      notify: [COMMANDER, LOADMASTER]
+      message: >
+        CONDOR 71 is established at drop altitude 2,350 ft MSL, 130 KIAS, on the
+        run-in to DZ-ALPHA heading 090. The CARP is 4 minutes ahead.
+    - at: 68
+      flight_phase: climb
+      heading: 120
+      requires: [door_closed]
+    - {at: 74,  flight_phase: cruise}
+    - {at: 100, flight_phase: descent, heading: 95}
+    - at: 107
+      flight_phase: landing
+      requires: [approach_clearance, "checklist:BEFORE LANDING"]
+    - at: 110
+      flight_phase: ground
+      notify: [COMMANDER]
+      message: >
+        CONDOR 71 has landed at KIRO and is clear of the runway. Deliver the
+        mission debrief to the crew.
+
+  # Waypoint passages are announced to the Navigator.
+  waypoints:
+    - {name: TAKEOFF,     at: 12, silent: true}
+    - {name: WPT ALPHA,   at: 30}
+    - {name: WPT BRAVO,   at: 54}
+    - {name: DZ-ALPHA,    at: 64, silent: true}
+    - {name: WPT CHARLIE, at: 88}
+    - {name: KIRO,        at: 110, silent: true}
+
+  # When a release lands on the DZ.  A bundle released outside this window is
+  # allowed (it is physically possible) but scored as off target, not delivered.
+  # Slips with the timeline like everything else.
+  drop_window: {opens: 64, closes: 65}
+
+  hazards:
+    - {type: turbulence, near: WPT BRAVO, from: 44, to: 58, band_fl: [160, 200]}
+
+  phases:
+
+    - id: pre_mission
+      name: "Phase 1 - Pre-Mission Planning"
+      at: 0
+      events:
+        - at_time: 1
+          inject_to: COPILOT
+          message: >
+            The aircraft is powered up and preflight checks are underway.
+            Make initial radio contact with Alpha Approach on 124.35 to
+            advise that CONDOR 71, a C-130J, is on the ground at KIRO and
+            is planning an IFR departure in approximately 10 minutes.
+            Request current ATIS information and advise that you will be
+            calling back shortly for your IFR clearance.
+
+        - at_time: 3
+          inject_to: COPILOT
+          requires: [go_decision]
+          message: >
+            The crew brief is complete, GO is confirmed, and the aircraft is in
+            the pre-start configuration. File the flight plan for Operation
+            AIRDROP ALPHA and contact Clearance Delivery (Alpha Approach,
+            124.35) to obtain the IFR departure clearance. Read back the
+            clearance verbatim, set the squawk on the transponder, then brief
+            COMMANDER on the full clearance including squawk code, departure
+            heading, and initial altitude.
+
+    - id: engine_start_departure
+      name: "Phase 2 - Engine Start & Departure"
+      at: 6
+      events:
+        - at_time: 10
+          inject_to: ATC
+          requires: [taxi_clearance, "checklist:BEFORE TAKEOFF"]
+          message: >
+            CONDOR 71 is holding short runway two-seven-left and is ready for
+            takeoff. Engine start, taxi and Before Takeoff checklists are
+            complete. Issue takeoff clearance with departure heading and any
+            initial altitude restriction.
+
+    - id: enroute
+      name: "Phase 3 - Enroute"
+      at: 21
+      events:
+        - at_time: 34
+          inject_to: ATC
+          message: >
+            Issue a PIREP advisory to CONDOR 71: Moderate turbulence reported
+            between FL160 and FL200 near Waypoint BRAVO. Pilots reporting
+            smooth air at FL140. Suggest pilots request lower altitude if
+            they wish to deviate.
+
+        - at_time: 36
+          inject_to: NAVIGATOR
+          message: >
+            The Aircraft Commander requires an assessment: what is the impact
+            of descending to FL140 from our current position? Provide updated
+            ETA to DZ-ALPHA and estimated fuel burn change.
+
+    - id: dz_approach
+      name: "Phase 4 - DZ Approach & Airdrop"
+      at: 49
+      events:
+        - at_time: 49
+          inject_to: NAVIGATOR
+          message: >
+            We are 15 minutes from DZ-ALPHA. Compute the CARP using the current
+            wind at drop altitude (1500 ft AGL). Deliver the CARP to COMMANDER
+            and LOADMASTER and give COPILOT the Romeo-4 boundary time.
+
+        - at_time: 51
+          inject_to: LOADMASTER
+          requires: [carp_computed]
+          message: >
+            NAVIGATOR has computed the CARP. Begin drop preparation. Verify all
+            five bundles, report cargo status to COMMANDER, and request
+            authorization to open the cargo door.
+
+        - at_time: 56
+          inject_to: ATC
+          message: >
+            CONDOR 71 COPILOT is requesting transit clearance for Restricted
+            Area ROMEO-4 for an airdrop at DZ-ALPHA. Check the sector, then
+            issue the clearance and any applicable DZ transit conditions.
+
+        - at_time: 64
+          inject_to: COMMANDER
+          message: >
+            CONDOR 71 is at the CARP on the drop run. If the door is open and
+            the crew is ready, call the drop.
+
+    - id: recovery
+      name: "Phase 5 - Recovery & Landing"
+      at: 68
+      events:
+        - at_time: 70
+          inject_to: NAVIGATOR
+          message: >
+            The drop run is finished and the aircraft is climbing out. Set
+            course for Waypoint CHARLIE then KIRO. Report updated ETA to KIRO
+            and current fuel state to COMMANDER.
+
+        - at_time: 72
+          inject_to: LOADMASTER
+          message: >
+            The aircraft has left the drop zone. Secure the cargo bay, verify
+            the cargo door is closed and sealed, and report ready-for-landing
+            status to COMMANDER.
+
+        - at_time: 96
+          inject_to: ATC
+          message: >
+            CONDOR 71 has departed the DZ and is returning to KIRO.
+            Issue approach and landing clearance.
