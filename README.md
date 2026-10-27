@@ -8,6 +8,17 @@ The design rule is **structure the envelope, not the conversation**. The graph o
 
 The Python package is `airdrop_alpha` and the command is `airdrop`, after the first mission.
 
+## Part of the Acquisition Knowledge System
+
+Aircrew-LangChain is a component of the [Acquisition Knowledge System (AKS)](https://github.com/semanticarchitectures/acquisition-knowledge-system),
+a demonstration of AI architecting and simulating Air Force enterprise operations, at scale and
+realistically, and then being used in that enterprise, safely and under human authority.
+
+Its role in AKS: LangGraph agents operating in the simulated enterprise under
+role-based authority, and the first place AKS captures agent decisions as traces. It carries AKS
+milestones D1 (mission order and authorization) and D2 (ENSIM Mission 1). Cross-component specs, the shared ontology and decisions live in the
+umbrella repo.
+
 ## Status
 
 | | |
