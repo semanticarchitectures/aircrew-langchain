@@ -1,0 +1,25 @@
+{
+  "source": "https://github.com/semanticarchitectures/ENSIM",
+  "commit": "aa7b7140785ae632aa1c6e07e9031b422906e2fa",
+  "license": "Apache-2.0 (LICENSE and NOTICE copied alongside)",
+  "copied_on": "2026-11-06",
+  "files": [
+    {
+      "path": "packages/org-doctrine-model/data/roles.json",
+      "sha256": "eed95dd18f18e53d7dca094e7dd713ca5ac0d3d0f76a2a0ea99225e163ad7acc"
+    },
+    {
+      "path": "packages/org-doctrine-model/data/interactions.json",
+      "sha256": "f7bc2d3efb61a8586beaa3bc99c2f74d980f92c17a96d213e65f5f9fb085e958"
+    },
+    {
+      "path": "packages/org-doctrine-model/data/systems.json",
+      "sha256": "339a8bfd954069d7923095862972de6a906bfa1024f216756f0a7dd860dc4c56"
+    },
+    {
+      "path": "packages/org-doctrine-model/data/organizations.json",
+      "sha256": "53b3d6cadde9893978c5659c0370ab608221148faa8ff6f056a0a855a89b4dc2"
+    }
+  ],
+  "note": "Copied unchanged. Roles, links and systems this project needs that ENSIM lacks are added in operating_model/local.yaml and marked representative."
+}

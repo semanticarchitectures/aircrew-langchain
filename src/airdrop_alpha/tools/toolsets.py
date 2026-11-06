@@ -23,6 +23,7 @@ from langchain.tools import ToolRuntime, tool
 
 from ..domain import data
 from ..domain.comms import CommsDenied, make_message, resolve_recipients
+from ..domain.roster import AIR_TRAFFIC_CONTROLLER, AIRCRAFT_COMMANDER, COPILOT, LOADMASTER, NAVIGATOR
 from ..domain.world import World
 from .context import TurnContext
 
@@ -34,7 +35,20 @@ def _world(runtime: Runtime) -> World:
 
 
 def _actor(runtime: Runtime) -> str:
+    """The acting agent's id.  The graph binds it; the model cannot choose it."""
     return runtime.context.actor
+
+
+def _holder(runtime: Runtime, role: str) -> list[str]:
+    """The callsign a standard call to ``role`` goes to: the first seat holding it."""
+    holders = runtime.context.world.roster.callsigns_for((role,))
+    return holders[:1] or [role.upper()]
+
+
+def _radio_peer(runtime: Runtime) -> list[str]:
+    """The aircraft station on the other end of the sender's radio net."""
+    ctx = runtime.context
+    return ctx.world.roster.radio_peers(ctx.callsign)[:1] or ["COPILOT"]
 
 
 def _out(result: Any) -> str:
@@ -46,17 +60,18 @@ def _transmit(runtime: Runtime, to: list[str] | str, body: str, *, priority: str
     """Queue a message on the right channel, or record why it was refused."""
     ctx = runtime.context
     try:
-        channel, recipients = resolve_recipients(ctx.actor, to)
+        channel, recipients = resolve_recipients(ctx.callsign, to, ctx.world.roster)
     except CommsDenied as exc:
         ctx.comms_events.append({
-            "type": "comms_denied", "t": round(ctx.world.clock_min, 2), "actor": ctx.actor,
-            "to": to if isinstance(to, list) else [to], "rule": exc.rule, "reason": exc.reason,
+            "type": "comms_denied", "t": round(ctx.world.clock_min, 2), "actor": ctx.callsign,
+            "agent_id": ctx.agent_id, "to": to if isinstance(to, list) else [to], "rule": exc.rule,
+            "reason": exc.reason,
         })
         return {"sent": False, "denied": True, "rule": exc.rule, "reason": exc.reason}
     if not body or not body.strip():
         return {"sent": False, "error": "Message body is empty."}
-    ctx.outbox.append(make_message(sender=ctx.actor, to=recipients, body=body, priority=priority,
-                                   channel=channel, kind=kind, meta=meta))
+    ctx.outbox.append(make_message(sender=ctx.callsign, to=recipients, body=body, priority=priority,
+                                   channel=channel, kind=kind, meta=meta, sender_id=ctx.agent_id))
     return {"sent": True, "channel": channel, "to": recipients, "priority": priority}
 
 
@@ -182,7 +197,7 @@ async def authorize_door_open(runtime: Runtime) -> str:
     the ROMEO-4 clearance has been relayed.
     """
     result = _world(runtime).authorize_door_open(_actor(runtime))
-    return _announce(runtime, result, ["LOADMASTER"], "LOADMASTER, COMMANDER. Door open authorized.",
+    return _announce(runtime, result, _holder(runtime, LOADMASTER), "LOADMASTER, COMMANDER. Door open authorized.",
                      kind="authorization", meta={"authorizes": "door_open"})
 
 
@@ -193,7 +208,7 @@ async def authorize_airdrop(runtime: Runtime) -> str:
     Without this the Loadmaster cannot release any bundle.
     """
     result = _world(runtime).authorize_airdrop(_actor(runtime))
-    return _announce(runtime, result, ["LOADMASTER"], "LOADMASTER, COMMANDER. Execute airdrop.",
+    return _announce(runtime, result, _holder(runtime, LOADMASTER), "LOADMASTER, COMMANDER. Execute airdrop.",
                      kind="authorization", meta={"authorizes": "airdrop"})
 
 
@@ -205,7 +220,7 @@ async def revoke_authorizations(reason: str, runtime: Runtime) -> str:
         reason: Why the drop is being held.
     """
     result = _world(runtime).revoke_authorizations(_actor(runtime), reason)
-    return _announce(runtime, result, ["LOADMASTER"],
+    return _announce(runtime, result, _holder(runtime, LOADMASTER),
                      f"LOADMASTER, COMMANDER. Hold the drop. Authorization withdrawn. {reason}",
                      priority="URGENT", kind="authorization", meta={"authorizes": "none"})
 
@@ -497,7 +512,7 @@ async def issue_clearance(
         altitude_fl: The cleared flight level when the clearance assigns one, e.g. 140.
     """
     result = _world(runtime).issue_clearance(_actor(runtime), clearance_type, text, altitude_fl)
-    return _announce(runtime, result, ["COPILOT"], text, kind="clearance",
+    return _announce(runtime, result, _radio_peer(runtime), text, kind="clearance",
                      meta={"clearance_type": result.get("type"), "altitude_fl": result.get("altitude_fl")})
 
 
@@ -510,7 +525,7 @@ async def cancel_clearance(clearance_type: str, reason: str, runtime: Runtime) -
         reason: Why it is cancelled.
     """
     result = _world(runtime).cancel_clearance(_actor(runtime), clearance_type, reason)
-    return _announce(runtime, result, ["COPILOT"],
+    return _announce(runtime, result, _radio_peer(runtime),
                      f"CONDOR 71, Alpha Approach. {clearance_type.replace('_', ' ').title()} clearance cancelled. {reason}",
                      priority="URGENT", kind="clearance",
                      meta={"clearance_type": clearance_type.upper(), "cancelled": True})
@@ -528,7 +543,7 @@ async def issue_hold(fix: str, direction: str, leg_time: str, runtime: Runtime) 
     text = (f"CONDOR 71, Alpha Approach. Hold at {fix}, {direction} turns, {leg_time} legs. "
             "Expect further clearance in one-five minutes.")
     result = _world(runtime).record_advisory(_actor(runtime), "issue_hold", fix=fix, text=text)
-    return _announce(runtime, result, ["COPILOT"], text, kind="clearance", meta={"clearance_type": "HOLD"})
+    return _announce(runtime, result, _radio_peer(runtime), text, kind="clearance", meta={"clearance_type": "HOLD"})
 
 
 @tool
@@ -540,7 +555,7 @@ async def provide_weather_advisory(pirep: str, runtime: Runtime) -> str:
     """
     text = f"CONDOR 71, Alpha Approach. Pilot report: {pirep}"
     result = _world(runtime).record_advisory(_actor(runtime), "provide_weather_advisory", text=text)
-    return _announce(runtime, result, ["COPILOT"], text, kind="advisory", meta={"advisory": "weather"})
+    return _announce(runtime, result, _radio_peer(runtime), text, kind="advisory", meta={"advisory": "weather"})
 
 
 @tool
@@ -552,7 +567,7 @@ async def issue_traffic_advisory(traffic_info: str, runtime: Runtime) -> str:
     """
     text = f"CONDOR 71, Alpha Approach. Traffic advisory: {traffic_info}"
     result = _world(runtime).record_advisory(_actor(runtime), "issue_traffic_advisory", text=text)
-    return _announce(runtime, result, ["COPILOT"], text, priority="URGENT", kind="advisory",
+    return _announce(runtime, result, _radio_peer(runtime), text, priority="URGENT", kind="advisory",
                      meta={"advisory": "traffic"})
 
 
@@ -567,7 +582,7 @@ async def coordinate_emergency(emergency_type: str, runtime: Runtime) -> str:
             "Cleared direct Iron Mountain. Say souls on board and fuel remaining.")
     result = _world(runtime).record_advisory(_actor(runtime), "coordinate_emergency",
                                              emergency_type=emergency_type, text=text)
-    return _announce(runtime, result, ["COPILOT"], text, priority="EMERGENCY", kind="emergency",
+    return _announce(runtime, result, _radio_peer(runtime), text, priority="EMERGENCY", kind="emergency",
                      meta={"emergency_type": emergency_type})
 
 
@@ -587,27 +602,28 @@ async def check_sector_traffic(runtime: Runtime) -> str:
 # Role toolsets
 # ---------------------------------------------------------------------------
 
+#: Tools by role.  A seat gets the tool set of the role the mission order gives it.
 TOOLSETS: dict[str, list] = {
-    "COMMANDER": [
+    AIRCRAFT_COMMANDER: [
         send_message, review_mission_brief, query_weather, make_go_nogo, authorize_door_open,
         authorize_airdrop, revoke_authorizations, declare_emergency, abort_mission,
         get_aircraft_state, get_fuel_state, get_performance_envelope, get_engine_out_performance,
         read_sop,
     ],
-    "COPILOT": [
+    COPILOT: [
         send_message, file_flight_plan, set_transponder, execute_checklist, set_cruise_altitude,
         query_nav_data, get_aircraft_state, get_fuel_state, read_sop,
     ],
-    "NAVIGATOR": [
+    NAVIGATOR: [
         send_message, compute_route, check_airspace, calculate_dz_offset, get_eta, get_fuel_plan,
         update_route, query_weather, get_aircraft_state, compute_performance_at, read_sop,
     ],
-    "LOADMASTER": [
+    LOADMASTER: [
         send_message, review_manifest, calculate_weight_balance, inspect_cargo, plan_drop_sequence,
         report_cargo_status, open_door, close_door, execute_airdrop, abort_airdrop, secure_cargo,
         clear_abort, read_sop,
     ],
-    "ATC": [
+    AIR_TRAFFIC_CONTROLLER: [
         send_message, approve_flight_plan, issue_clearance, cancel_clearance, issue_hold,
         provide_weather_advisory, issue_traffic_advisory, coordinate_emergency, query_flight_plan,
         check_sector_traffic, read_sop,

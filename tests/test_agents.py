@@ -7,7 +7,8 @@ from airdrop_alpha.agents.factory import build_crew, render_prompt
 from airdrop_alpha.agents.playbooks import scripted_models
 from airdrop_alpha.agents.scripted import Rule, ScriptedChatModel, say, split_prompt
 from airdrop_alpha.domain.data import knowledge_dir
-from airdrop_alpha.domain.world import ROLES, World
+from airdrop_alpha.domain.roster import AIR_TRAFFIC_CONTROLLER, AIRCRAFT_COMMANDER, LOADMASTER
+from airdrop_alpha.domain.world import World
 from airdrop_alpha.graph.crew import make_crew_node, render_turn_prompt
 from airdrop_alpha.graph.state import initial_state, post_messages
 from airdrop_alpha.domain.comms import make_message
@@ -30,10 +31,10 @@ def _state_with_traffic(scenario, to, body, sender="SCENARIO_RUNNER"):
 
 def test_tools_are_scoped_by_role_and_hide_the_runtime():
     names = {role: {t.name for t in tools} for role, tools in TOOLSETS.items()}
-    assert "execute_airdrop" in names["LOADMASTER"]
-    assert all("execute_airdrop" not in names[r] for r in ROLES if r != "LOADMASTER")
-    assert all("authorize_airdrop" not in names[r] for r in ROLES if r != "COMMANDER")
-    assert all("issue_clearance" not in names[r] for r in ROLES if r != "ATC")
+    assert "execute_airdrop" in names[LOADMASTER]
+    assert all("execute_airdrop" not in names[r] for r in TOOLSETS if r != LOADMASTER)
+    assert all("authorize_airdrop" not in names[r] for r in TOOLSETS if r != AIRCRAFT_COMMANDER)
+    assert all("issue_clearance" not in names[r] for r in TOOLSETS if r != AIR_TRAFFIC_CONTROLLER)
     assert all("send_message" in n for n in names.values())
     # the stubs that returned canned text in the original are gone
     gone = {"contact_atc", "relay_atc_message", "request_clearance", "brief_crew",
@@ -45,7 +46,7 @@ def test_tools_are_scoped_by_role_and_hide_the_runtime():
 
 
 def test_prompts_render_for_every_role(scenario):
-    for role in ROLES:
+    for role in TOOLSETS:
         prompt = render_prompt(role, scenario)
         assert "{{" not in prompt and "HOW THIS SIMULATION WORKS" in prompt
         assert "FROM:" not in prompt                         # no header format to parse any more

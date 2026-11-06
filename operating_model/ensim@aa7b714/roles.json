@@ -1,0 +1,257 @@
+[
+  {
+    "id": "cfacc",
+    "name": "Combined Force Air Component Commander (CFACC)",
+    "organizationId": "pacaf-theater-aoc",
+    "c2NodeId": "aoc-tasking-node",
+    "responsibilities": [
+      "Plans, tasks, and controls air operations for the joint/combined force",
+      "Approves the Air Tasking Order"
+    ],
+    "authorities": [
+      "Air component commander authority over assigned/attached air forces"
+    ],
+    "reportsToRoleId": null,
+    "doctrineSource": [
+      { "publication": "AFDP 3-0.1" }
+    ]
+  },
+  {
+    "id": "dirmobfor",
+    "name": "Director of Mobility Forces (DIRMOBFOR)",
+    "organizationId": "pacaf-theater-aoc",
+    "c2NodeId": "aoc-air-mobility-division",
+    "responsibilities": [
+      "Acts as air mobility functional advisor to the air component commander",
+      "Synchronizes intra-theater and inter-theater airlift"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "cfacc",
+    "doctrineSource": [
+      { "publication": "JP 3-17" },
+      { "publication": "AFMAN 13-1AOC Vol 3", "section": "25 Jun 2024 edition, §2.3.8", "note": "c2NodeId corrected 2026-09-05 from the generic aoc-tasking-node placeholder to the Air Mobility Division (AMD), which this source identifies as the doctrinal home for mobility tasking and coordination with the 618 AOC/TACC." }
+    ]
+  },
+  {
+    "id": "combat-operations-division-duty-officer",
+    "name": "Combat Operations Division (COD) Chief / Chief of Combat Operations (CCO)",
+    "organizationId": "pacaf-theater-aoc",
+    "c2NodeId": "aoc-combat-operations-division",
+    "responsibilities": [
+      "Executes the current ATO/ATONEWS and ACO during the 24-hour execution period"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "cfacc",
+    "doctrineSource": [
+      { "publication": "AFMAN 13-1AOC Vol 3", "section": "25 Jun 2024 edition, §2.3.6", "note": "Corrected 2026-09-05: this role was previously (incorrectly) described as building/publishing the ATO. Per this primary source, COD executes the ATO that Combat Plans Division (CPD) builds — see the new combat-plans-division-chief role." }
+    ]
+  },
+  {
+    "id": "combat-plans-division-chief",
+    "name": "Combat Plans Division (CPD) Chief",
+    "organizationId": "pacaf-theater-aoc",
+    "c2NodeId": "aoc-combat-plans-division",
+    "responsibilities": [
+      "Responsible for near-term AOC planning (within 48 hours prior to ATO execution)",
+      "Builds and publishes the Air Tasking Order (ATO)/ATONEWS, Airspace Control Order (ACO), Airspace Control Plan (ACP), Joint Integrated Prioritized Target List (JIPTL), and SPINS"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "cfacc",
+    "doctrineSource": [
+      { "publication": "AFMAN 13-1AOC Vol 3", "section": "25 Jun 2024 edition, §2.3.5, §4.5.1", "note": "AFSC 11/12/13B, Rank O-6 per source." }
+    ]
+  },
+  {
+    "id": "mission-commander",
+    "name": "Mission Commander",
+    "organizationId": "535th-airlift-squadron",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Overall mission execution and decision authority for the tasked sortie"
+    ],
+    "authorities": [],
+    "reportsToRoleId": null,
+    "doctrineSource": [
+      { "publication": "Aircrew doctrine reference", "note": "Generic mission-commander concept; not tied to a specific numbered instruction in this dataset." }
+    ]
+  },
+  {
+    "id": "aircraft-commander",
+    "name": "Aircraft Commander",
+    "organizationId": "535th-airlift-squadron",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Pilot in command of the tasked C-17"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "mission-commander",
+    "doctrineSource": [
+      { "publication": "Aircrew doctrine reference" }
+    ]
+  },
+  {
+    "id": "copilot",
+    "name": "Copilot",
+    "organizationId": "535th-airlift-squadron",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Assists the Aircraft Commander in flight operations"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "aircraft-commander",
+    "doctrineSource": [
+      { "publication": "Aircrew doctrine reference" }
+    ]
+  },
+  {
+    "id": "loadmaster",
+    "name": "Loadmaster",
+    "organizationId": "535th-airlift-squadron",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Rigs and releases Container Delivery System (CDS) bundles during airdrop",
+      "Computes and verifies aircraft weight and balance / center of gravity for the loaded cargo configuration",
+      "Monitors the cargo compartment during flight and reports equipment status/failures to the flight deck via intercom"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "aircraft-commander",
+    "training": [
+      {
+        "name": "Aircraft Loadmaster initial qualification course",
+        "institution": "344th Training Squadron, Joint Base San Antonio-Lackland, TX",
+        "duration": "~5 weeks",
+        "description": "Core qualification tasks common to all loadmaster assignments: load planning, weight and balance computation, cargo restraint procedures, aerial delivery rigging, passenger management, and emergency procedures. Awards AFSC 1A2X1 (Aircraft Loadmaster) on completion.",
+        "doctrineSource": [
+          {
+            "publication": "CFETP 1A2X1, Aircraft Loadmaster Career Field Education and Training Plan",
+            "note": "Course location/content confirmed via web search on 2026-09-07 (multiple corroborating secondary sources: wingduty.com, operationmilitarykids.org); the primary CFETP PDF itself (static.e-publishing.af.mil) could not be directly fetched from this session's environment — every .mil domain returns a network-level Akamai 403 here, not a content-specific block, same constraint noted on the air-traffic-controller and drop-zone-support-team-leader Role records."
+          }
+        ]
+      },
+      {
+        "name": "C-17 aircraft-specific qualification course",
+        "institution": "Altus AFB, OK",
+        "duration": "~12 weeks",
+        "description": "Airframe-specific follow-on training for the C-17 Globemaster III, after the initial AFSC-awarding course. Duration and content vary by airframe (Little Rock AFB, AR for C-130).",
+        "doctrineSource": [
+          {
+            "publication": "CFETP 1A2X1, Aircraft Loadmaster Career Field Education and Training Plan",
+            "note": "Same verification status as the initial qualification course entry above — confirmed via corroborating secondary sources, primary CFETP PDF not directly fetchable this session."
+          }
+        ]
+      }
+    ],
+    "doctrineSource": [
+      { "publication": "DAFMAN 13-217", "section": "Drop-Zone and Landing-Zone Operations" }
+    ]
+  },
+  {
+    "id": "air-traffic-controller",
+    "name": "Air Traffic Controller",
+    "organizationId": "15th-wing",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Provides air traffic control services and airspace separation, including separation of airdrop/airland operations from other air traffic"
+    ],
+    "authorities": [],
+    "reportsToRoleId": null,
+    "doctrineSource": [
+      {
+        "publication": "AFMAN 13-204 Volume 3, Air Traffic Control",
+        "note": "Confirmed by publication title/summary via web search on 2026-09-07 (including that military authority assumes responsibility for separation of airdrop/airland operations at applicable installations); the exact section number for airdrop-separation provisions was not independently verified — static.e-publishing.af.mil and all other .mil domains returned an Akamai network-level 403 from this session's environment (confirmed via curl, WebFetch, and a real browser session), not a content-specific block. organizationId assigned to 15th Wing (home station Hickam, the mission's departure airfield) as a doctrinally reasonable placement for airfield/ATC functions, not independently verified against a specific 15th Wing unit designation."
+      }
+    ]
+  },
+  {
+    "id": "drop-zone-support-team-leader",
+    "name": "Drop Zone Support Team Leader (DZSTL)",
+    "organizationId": null,
+    "c2NodeId": null,
+    "responsibilities": [
+      "Senior member of the Drop Zone Support Team (DZST); leads ground personnel at the drop zone and coordinates drop zone status/readiness with the tasked aircrew"
+    ],
+    "authorities": [],
+    "reportsToRoleId": null,
+    "doctrineSource": [
+      {
+        "publication": "DAFMAN 13-217, Drop Zone, Landing Zone, and Helicopter Landing Zone Operations",
+        "note": "Confirmed via web search on 2026-09-07: the senior member of the Drop Zone Support Team (DZST) functions as the Drop Zone Support Team Leader (DZSTL) and must be an NCO, officer, or civilian equivalent who has completed DZST member training. A related Drop Zone Safety Officer (DZSO) position also exists in this doctrine but is out of scope for this minimal role set. Exact chapter/section number not independently verified — same network-access constraint as the air-traffic-controller record. organizationId left null: which unit provides the DZST for this specific scenario (e.g. a JTF-organic or host-nation element) is not modeled."
+      }
+    ]
+  },
+  {
+    "id": "toc-l-coordinator",
+    "name": "TOC-L Coordinator",
+    "organizationId": "pacaf",
+    "c2NodeId": "toc-l",
+    "responsibilities": [
+      "Fuses sensor and battle-management data into a common air picture (TOC-L's real, documented function)",
+      "Produces UAV flight plans for Rapid Dragon-class palletized ISR UAV deployment and provides detailed launch/release instructions to the tasked aircrew's Loadmaster (this mission's extension of that function)"
+    ],
+    "authorities": [],
+    "reportsToRoleId": null,
+    "doctrineSource": [
+      {
+        "publication": "\"Air Force TOC-L enhances joint force C2\"",
+        "url": "https://www.af.mil/News/Article-Display/Article/4170256/air-force-toc-l-enhances-joint-force-c2/",
+        "note": "Same verification status as the toc-l C2Node record's citation. The specific rank/AFSC for whoever staffs a TOC-L console is not modeled — kept generic as 'TOC-L Coordinator' rather than naming an unverified specific position title."
+      }
+    ]
+  },
+  {
+    "id": "flight-nurse-medical-crew-director",
+    "name": "Flight Nurse (Medical Crew Director)",
+    "organizationId": "18th-aeromedical-evacuation-squadron",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Overall supervision of patient care and management of the Aeromedical Evacuation Crew (AEC) assigned to the mission",
+      "Advises the Aircraft Commander on patients' conditions and on use of medical equipment that may affect aircraft operations",
+      "Verifies the patient manifest and precedence/type mix against the TPMRC-validated Patient Movement Request before departure"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "aircraft-commander",
+    "doctrineSource": [
+      {
+        "publication": "AFI 48-307 (En Route Care and Aeromedical Evacuation Medical Operations) / DAFI 48-107 series",
+        "note": "Medical Crew Director (a qualified flight nurse) responsibilities confirmed via web search on 2026-09-09, corroborated by USAF career-field and AES public materials. Clinical practice during mission execution is under the medical direction of a ground-based Theater Validating Flight Surgeon (TVFS), not modeled as a separate Role in this v1 dataset. reportsToRoleId is set to aircraft-commander as the doctrinally reasonable in-flight command relationship (the MCD advises the AC, the same structural pattern as the loadmaster role) — the primary AFI/DAFI PDFs (static.e-publishing.af.mil) could not be directly fetched, same .mil network-block constraint noted throughout this dataset."
+      }
+    ]
+  },
+  {
+    "id": "aeromedical-evacuation-technician",
+    "name": "Aeromedical Evacuation Technician",
+    "organizationId": "18th-aeromedical-evacuation-squadron",
+    "c2NodeId": null,
+    "responsibilities": [
+      "Provides hands-on inpatient medical-surgical care with Basic Life Support (BLS) and Advanced Cardiac Life Support (ACLS) resuscitative capability during flight",
+      "Monitors assigned patients and reports status/condition changes to the Flight Nurse (Medical Crew Director)"
+    ],
+    "authorities": [],
+    "reportsToRoleId": "flight-nurse-medical-crew-director",
+    "doctrineSource": [
+      {
+        "publication": "AFI 48-307 / DAFI 48-107 series; USAFSAM Flight Nurse and Aeromedical Evacuation Technician Course public materials",
+        "note": "Confirmed via web search on 2026-09-09 (airforcemedicine.af.mil course description, corroborated by USAF career-field public materials). Also called a 'Flight Medic' in some sources. Same .mil primary-source-fetch constraint as the flight-nurse-medical-crew-director role."
+      }
+    ]
+  },
+  {
+    "id": "staff-weather-officer",
+    "name": "Staff Weather Officer (SWO)",
+    "organizationId": "17th-operational-weather-squadron",
+    "c2NodeId": "aoc-weather-support-team",
+    "responsibilities": [
+      "Integrates weather effects into AOC short-term (1-3 day) mission planning and execution, advising AOC leadership and divisions on weather impacts to air operations",
+      "Fuses 17th Operational Weather Squadron theater-scale products with local mission requirements into tailored Mission Weather Products, per AFMAN 15-129's Mission Execution Forecast Process",
+      "Provides mission weather guidance that feeds the tasked aircrew's pre-flight Flight Weather Briefing (DD Form 175-1)"
+    ],
+    "authorities": [],
+    "reportsToRoleId": null,
+    "doctrineSource": [
+      {
+        "publication": "AFDP 3-59, Weather Operations (26 Sep 2025); AFMAN 15-129",
+        "note": "Confirmed via web search on 2026-09-10: 'SWO' refers to both officer and enlisted Air Force Weather personnel serving in a staff role, integrated into component/AOC staff functions for short-term mission planning and execution. Organizationally assigned to 17th-operational-weather-squadron (the real gaining unit for Pacific-theater weather personnel) while functionally embedded at the AOC's Weather Support Team (aoc-weather-support-team) — a staff-advisor relationship, not a command one, so reportsToRoleId is null, same pattern as toc-l-coordinator. Same .mil primary-source-fetch constraint as other AFDP/AFMAN citations in this dataset."
+      }
+    ]
+  }
+]

@@ -12,9 +12,9 @@ The Python package is `airdrop_alpha` and the command is `airdrop`, after the fi
 
 | | |
 |---|---|
-| Built | The governed envelope, five agents, scripted and live crews, checkpoints with resume and fork, a deterministic scorecard, 88 offline tests. |
+| Built | The governed envelope, scripted and live crews, checkpoints with resume and fork, a deterministic scorecard. Phase 1: a mission order that defines the roster and nets, checked against ENSIM's operating model; agent ids that name a configuration; authority keyed by role. 108 offline tests. |
 | Flown | Two live runs on Claude Sonnet 4.6 (see [Not verified, not modelled](#not-verified-not-modelled)). |
-| Planned | A mission order that defines the roster, role-based authorization that the commander can reassign, context scoped to procedures, validated examples from earlier runs, and ENSIM Mission 1. See [`docs/PLAN.md`](docs/PLAN.md). |
+| Planned | Role-based authorization that the commander can reassign, context scoped to procedures, validated examples from earlier runs, and ENSIM Mission 1. See [`docs/PLAN.md`](docs/PLAN.md). |
 
 Everything in `knowledge/` is fictional demonstration material. Nothing in the simulation is yet traceable to published Air Force or Joint doctrine; `docs/PLAN.md` describes how that is meant to change.
 
@@ -27,7 +27,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
 airdrop run --crew scripted          # full mission, offline, no API key
-pytest                               # 88 tests, about 25 seconds, offline
+pytest                               # 108 tests, about 20 seconds, offline
 ```
 
 For a live crew, copy `.env.example` to `.env`, set `ANTHROPIC_API_KEY`, then:
@@ -42,17 +42,22 @@ Python 3.11 or later.
 ## How it is put together
 
 ```
-START -> scheduler -> { COMMANDER | COPILOT | NAVIGATOR | LOADMASTER | ATC } -> scheduler -> ... -> END
+START -> scheduler -> { one node per seat in the mission order } -> scheduler -> ... -> END
 ```
+
+With the standard order the seats are COMMANDER, COPILOT, NAVIGATOR, LOADMASTER and ATC.
 
 | Layer | Where | What it does |
 |---|---|---|
-| World | `domain/world.py` | One serialisable state object (aircraft, cargo, authority, ATC, nav, checklists) and every operation on it. No framework imports. Every state-changing operation checks the acting callsign and its own preconditions. |
-| Comms | `domain/comms.py` | Message shape and the policy for who may address whom. |
-| Tools | `tools/toolsets.py` | LangChain `@tool` adapters from a tool call to a world operation, grouped by role. They reach the world through `ToolRuntime.context`. |
-| Agents | `agents/factory.py`, `agents/prompts/` | One `create_agent` per role: prompt, role toolset, model. |
+| Mission order | `scenarios/*.order.yaml`, `order.py` | Who flies the mission and what they may know: the roster (agent id, role, callsign, duty position), the nets, route, cargo and planned times. Checked against the operating model before a run. Format: [`docs/mission-order.md`](docs/mission-order.md). |
+| Operating model | `operating_model/`, `operating_model.py` | A pinned, unedited snapshot of ENSIM's roles, interactions and systems (`ensim@aa7b714`), plus a local supplement for what ENSIM lacks. Everything that relies on the supplement is reported as representative. |
+| Roster | `domain/roster.py`, `agents/types.py` | Seats, nets and agent ids. An id (`GeneralistV1.Instance4`) names a registered configuration and one copy of it. |
+| World | `domain/world.py` | One serialisable state object (aircraft, cargo, authority, ATC, nav, checklists, roster) and every operation on it. No framework imports. Every state-changing operation resolves the acting agent to its seat's role, checks the role, then its own preconditions. |
+| Comms | `domain/comms.py` | Message shape and the policy for who may address whom, read from the order's nets. |
+| Tools | `tools/toolsets.py` | LangChain `@tool` adapters from a tool call to a world operation, grouped by role. They reach the world through `ToolRuntime.context`, as the agent id the graph binds. |
+| Agents | `agents/factory.py`, `agents/prompts/` | One `create_agent` per seat: the role's prompt and tool set, and the model of the seat's agent type. |
 | Graph | `graph/` | The LangGraph `StateGraph`. `scheduler` owns the clock and the turn order. Each crew node runs one agent turn as a transaction. |
-| Scenario | `scenarios/*.yaml`, `scenario.py` | The timeline: flight profile, waypoints, injected events, and the conditions each one waits for. |
+| Scenario | `scenarios/*.yaml`, `scenario.py` | The simulator's side, which agents never see: flight profile, waypoints, hazards, injected events, and the conditions each one waits for. Names its mission order. |
 | Scorecard | `scorecard.py` | A deterministic read-out of a run, computed from checkpointed state. |
 
 ### The scheduler
@@ -76,14 +81,16 @@ What an agent remembers is its own mission log: for each earlier turn, what it h
 
 `send_message` is the only way to speak. Text an agent writes outside a tool call is a private note. Two channels:
 
-- **Interphone**: the four crew members. `ALL` means the crew except the sender.
+- **Interphone**: the crew aboard. `ALL` means everyone on the interphone except the sender.
 - **Radio**: Co-Pilot and ATC only. Anyone else addressing ATC is refused and told to go through the Co-Pilot.
+
+Both come from the nets in the mission order, so another order can put other stations on them.
 
 Formal calls are coupled to the act they announce. `authorize_airdrop` both sets the authorization and transmits "LOADMASTER, COMMANDER. Execute airdrop." `issue_clearance` both records the clearance and transmits it. The same goes for GO/NO-GO, door authorization, abort and emergency.
 
 ### Authority
 
-Enforced in `World`, not in prompts. `execute_airdrop` succeeds only when all of these hold: the caller is the Loadmaster, the Commander has given the drop command, the door is open, a ROMEO-4 clearance is on record, the aircraft is on the drop run at 120-165 KIAS, the bundle's restraint is intact, CG stays within limits, and no abort is in effect. A refused action returns `denied: true` with the rule, changes nothing, and is counted in the scorecard.
+Enforced in `World`, not in prompts, and granted to roles. `execute_airdrop` succeeds only when all of these hold: the caller's seat holds the `loadmaster` role, the Commander has given the drop command, the door is open, a ROMEO-4 clearance is on record, the aircraft is on the drop run at 120-165 KIAS, the bundle's restraint is intact, CG stays within limits, and no abort is in effect. A refused action returns `denied: true` with the rule, changes nothing, and is counted in the scorecard.
 
 Checklists are verified against the world. `PREFLIGHT` reports the flight plan item open until a plan is filed and approved.
 
@@ -96,7 +103,7 @@ On the drop run, `get_aircraft_state` and `report_cargo_status` show the distanc
 ## Commands
 
 ```bash
-airdrop run [--crew live|scripted|rogue|eager] [--scenario FILE] [--interactive] [--party-line]
+airdrop run [--crew live|scripted|rogue|eager] [--scenario FILE] [--order FILE] [--interactive] [--party-line]
             [--pace SECONDS] [--run-id NAME] [--resume RUN_ID] [--dry-run] [--json]
 airdrop history RUN_ID                 # every checkpoint of a run
 airdrop fork RUN_ID --at-clock 60 --inject "!cargo_shift bundle=B-03 cg_shift_pct=4.9" \
@@ -114,12 +121,14 @@ Runs are checkpointed to `runs/airdrop.sqlite` after every agent turn and every 
 
 | `--crew` | What plays the roles |
 |---|---|
-| `live` | Chat models. `AIRDROP_MODEL` sets the model for every role; `AIRDROP_MODEL_<ROLE>` overrides one. The default is `anthropic:claude-sonnet-4-6`, the model the original used, so runs are comparable. Any `init_chat_model` string works. |
+| `live` | The agent types the order names. `GeneralistV1` runs `anthropic:claude-sonnet-4-6`, the model the original used, so runs are comparable. `AIRDROP_MODEL` sets the model for every seat and `AIRDROP_MODEL_<CALLSIGN>` for one; either is recorded in the run's roster as an override of the type's model. Any `init_chat_model` string works. |
 | `scripted` | A deterministic playbook (`agents/playbooks.py`). Flies the nominal mission and handles the cargo-shift abort. |
 | `rogue` | The scripted crew with a Loadmaster who tries the door and a release before being authorized. |
 | `eager` | The scripted crew with a Commander who calls the drop as soon as the door is open, four minutes before the CARP. |
 
-The scripted crews are test fixtures. They exist so the graph, guards, scheduler, checkpoints and scorecard can be exercised end to end without a model.
+The scripted crews are test fixtures. They exist so the graph, guards, scheduler, checkpoints and scorecard can be exercised end to end without a model. A scripted crew is recorded as what flew: `--crew scripted` seats `ScriptedNominalV1.Instance1` and so on, and notes the id each seat was ordered as. A playbook scripts named callsigns; a seat it does not script stays silent.
+
+`airdrop fork --crew` may put a different crew in the seats from the saved point, and records the change as a `crew_bound` event. `airdrop run --resume` must use the crew the run started with.
 
 ### Evaluator injects
 
@@ -138,7 +147,7 @@ A message tells an agent something. An effect changes the world, so the instrume
 
 ## Scenario files
 
-`scenarios/airdrop_alpha.yaml` is commented. The parts:
+`scenarios/airdrop_alpha.yaml` is commented. It names its mission order, `airdrop_alpha.order.yaml`; `--order` replaces it, for example with `airdrop_alpha_two_loadmasters.order.yaml`, which adds a second loadmaster (`LOAD 2`). The scenario's parts:
 
 - `flight_profile`: what the aircraft does and when, with `requires` conditions.
 - `waypoints`: passages announced to the Navigator.
@@ -147,7 +156,7 @@ A message tells an agent something. An effect changes the world, so the instrume
 - `phases[].events`: injected messages, optionally with `requires` and `effects`.
 - `settings`: hold length, hold limit, turn budgets, party line, memory size.
 
-`airdrop_alpha_abort.yaml` shows `extends` plus `extra_events`. `airdrop run --dry-run` prints the resolved timeline. Conditions usable in `requires` are in `CONDITIONS` in `domain/world.py`, plus `checklist:<NAME>`.
+`airdrop_alpha_abort.yaml` shows `extends` plus `extra_events`. `airdrop run --dry-run` prints the roster, the nets, what is representative, and the resolved timeline. Conditions usable in `requires` are in `CONDITIONS` in `domain/world.py`, plus `checklist:<NAME>`.
 
 ## What changed from the original
 
@@ -203,6 +212,11 @@ pytest
 | `test_agents.py` | Tool scoping, the scripted model, what a turn commits, denied actions and transmissions. |
 | `test_mission.py` | Full missions (nominal, abort, rogue, eager), determinism, checkpoints, fork, interactive pause and resume, re-scoring older runs, the CLI, no network in scripted runs. |
 | `test_live_path.py` | The real `ChatAnthropic` client against a local stand-in for the API: tool schemas, system prompt, cache markers, tool-result round trip, token counts. |
+| `test_order.py` | Phase 1: agent ids, the `GeneralistV1` fingerprint, roster binding, the ENSIM snapshot's integrity, order and scenario validation, authority by role, comms by net, and the Phase 1 gate (scripted scorecards unchanged from Phase 0, two loadmasters, saved runs of any order). |
+
+## Baselines
+
+`baselines/GeneralistV1/live2/` records live2 as the reference result of configuration `GeneralistV1`: its scorecard, messages and events, and `baseline.json` with the roster, the configuration's fingerprint and the caveats. The fingerprint (prompt templates, tool schemas, model, middleware) is pinned in `agents/types.py`; a test fails if any of them change, and the fix is a new version, not a new pin.
 
 ## Not verified, not modelled
 
@@ -215,3 +229,5 @@ pytest
 - Altitude changes affect fuel flow and turbulence exposure, not timing.
 - One agent acts at a time. That is deliberate (deterministic order, one checkpoint per turn) but it means no two crew members act in parallel.
 - A live run makes one model turn for every message an agent receives, including ones it answers with silence. In the scripted mission 32 of 84 turns are silent; in `live2`, 37 of 102.
+- `GeneralistV1`'s prompts and tool descriptions name the standard callsigns. An order with other callsigns runs, but its live agents are told the old names until a roster-aware prompt set (a new version) exists.
+- Standard calls to a role go to the first seat holding it. With two loadmasters, door and drop authorizations go to `LOADMASTER`; duty positions are recorded but do not yet route anything.

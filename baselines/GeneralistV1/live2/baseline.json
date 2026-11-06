@@ -1,0 +1,67 @@
+{
+  "configuration": "GeneralistV1",
+  "fingerprint": "f843ac3729ced7445b26a2c86f085c5272c467799d1a302a78bbeadc1921179f",
+  "run": {
+    "id": "live2",
+    "flown": "2026-10-03",
+    "model": "claude-sonnet-4-6",
+    "order": "airdrop-alpha (standard five-seat crew)",
+    "scenario": "scenarios/airdrop_alpha.yaml",
+    "code": "Committed as d320516 except for the cache-write counting fix, made after this run; that fix changes how tokens are counted, not what the agents see. The GeneralistV1 fingerprint is the same on d320516 and on phase-1/mission-order."
+  },
+  "roster": [
+    {
+      "callsign": "COMMANDER",
+      "agent_id": "GeneralistV1.Instance1",
+      "role": "aircraft-commander",
+      "position": "Aircraft commander"
+    },
+    {
+      "callsign": "COPILOT",
+      "agent_id": "GeneralistV1.Instance2",
+      "role": "copilot",
+      "position": "Copilot; works the radio"
+    },
+    {
+      "callsign": "NAVIGATOR",
+      "agent_id": "GeneralistV1.Instance3",
+      "role": "navigator",
+      "position": "Navigator"
+    },
+    {
+      "callsign": "LOADMASTER",
+      "agent_id": "GeneralistV1.Instance4",
+      "role": "loadmaster",
+      "position": "Loadmaster"
+    },
+    {
+      "callsign": "ATC",
+      "agent_id": "GeneralistV1.Instance5",
+      "role": "air-traffic-controller",
+      "position": "Alpha Approach controller"
+    }
+  ],
+  "results": {
+    "outcome": "COMPLETE",
+    "delivered": "5 of 5, released at the CARP",
+    "guard_denials": "2 (door_airspeed_limits, LOADMASTER)",
+    "agent_turns": 102,
+    "silent_turns": 37,
+    "model_calls": 228,
+    "input_tokens": 1767167,
+    "cache_read_tokens": 1376964,
+    "output_tokens": 19604,
+    "cost_usd": "1.88 to 2.17 (estimate from Sonnet 4.6 list prices; cache writes were not counted)"
+  },
+  "caveats": [
+    "One run. It is a reference point, not a rate.",
+    "cache_write_tokens reads 0 in scorecard.json: the counter missed the per-TTL fields at the time. The fix is in d320516.",
+    "A clean scorecard is not a clean run: the crew reported 'clear of Romeo-4' while still inside it, and 'no terrain conflicts' with no terrain data. Nothing yet checks what the crew says against recorded state.",
+    "live1 (the same day) flew before the drop-accuracy change, which changed what get_aircraft_state and report_cargo_status return, so it is not a GeneralistV1 result."
+  ],
+  "files": {
+    "scorecard.json": "5c186f66af94bdaf8f03f4cc5bb208fe9de22e7c1c5b4b39c9636bd25a008dda",
+    "messages.jsonl": "4f393988d532531a8748dc858241c0c6306ec7d505b5a7c339632514b3aeaa82",
+    "events.jsonl": "30c6137283bd66189d1ba078acfec4ff05a2b279e9cc7a150e3cfc1dc61fb54d"
+  }
+}

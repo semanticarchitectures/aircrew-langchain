@@ -22,7 +22,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from ..domain.comms import INTERPHONE, NON_AGENT_SENDERS, CrewMessage
-from ..domain.world import CREW, World
+from ..domain.world import World
 from ..tools.context import TurnContext
 from .state import MissionState, post_messages
 
@@ -150,7 +150,10 @@ def summarise_turn(
 
 
 def make_crew_node(callsign: str, agent: Any, knowledge_dir: Path):
-    """Build the graph node that gives ``callsign`` one turn."""
+    """
+    Build the graph node that gives the seat ``callsign`` one turn.  The agent
+    in the seat acts under the agent id the run's roster records for it.
+    """
 
     async def crew_turn(state: MissionState, config: RunnableConfig) -> dict:
         settings = state["scenario"]["settings"]
@@ -160,7 +163,9 @@ def make_crew_node(callsign: str, agent: Any, knowledge_dir: Path):
         last_seen = state["last_seen"].get(callsign, 0)
 
         overheard: list[CrewMessage] = []
-        if settings.get("party_line") and callsign in CREW:
+        seat = world.roster.seat(callsign)
+        agent_id = seat.agent_id if seat else callsign
+        if settings.get("party_line") and world.roster.interphone_of(callsign) is not None:
             mine = {m["seq"] for m in incoming}
             overheard = [m for m in log[last_seen:]
                          if m["channel"] == INTERPHONE and m["seq"] not in mine
@@ -176,7 +181,7 @@ def make_crew_node(callsign: str, agent: Any, knowledge_dir: Path):
             incoming=incoming, overheard=overheard,
         )
 
-        ctx = TurnContext(world=world, actor=callsign, knowledge_dir=knowledge_dir)
+        ctx = TurnContext(world=world, actor=agent_id, knowledge_dir=knowledge_dir)
         turn_number = state["counters"]["turns"] + 1
         result = await agent.ainvoke(
             {"messages": [HumanMessage(prompt)]},
@@ -184,8 +189,8 @@ def make_crew_node(callsign: str, agent: Any, knowledge_dir: Path):
             config={
                 "recursion_limit": 4 * int(settings.get("max_model_calls_per_turn", 20)) + 10,
                 "run_name": f"{callsign} turn {turn_number}",
-                "tags": [f"role:{callsign}"],
-                "metadata": {"callsign": callsign, "sim_time_min": world.clock_min,
+                "tags": [f"role:{callsign}", f"agent:{agent_id}"],
+                "metadata": {"callsign": callsign, "agent_id": agent_id, "sim_time_min": world.clock_min,
                              "run_id": state.get("run_id"), "turn": turn_number},
             },
         )
@@ -208,7 +213,8 @@ def make_crew_node(callsign: str, agent: Any, knowledge_dir: Path):
 
         events = world.drain_journal() + ctx.comms_events
         events.append({
-            "type": "turn", "t": round(world.clock_min, 2), "actor": callsign, "turn": turn_number,
+            "type": "turn", "t": round(world.clock_min, 2), "actor": callsign, "agent_id": agent_id,
+            "turn": turn_number,
             "heard": [m["seq"] for m in incoming], "sent": [m["seq"] for m in stamped],
             "silent": not stamped, "from_sim_only": all(m["sender"] in NON_AGENT_SENDERS for m in incoming),
             **stats,

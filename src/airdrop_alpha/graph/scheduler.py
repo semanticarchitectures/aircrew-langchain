@@ -22,10 +22,12 @@ from typing import Any
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 
+from ..agents.types import bind_roster
 from ..domain.comms import (
     EVALUATOR_SENDER, SCENARIO_SENDER, SIM, SYSTEM_SENDER, make_message, PRIORITIES,
 )
-from ..domain.world import EFFECTS, ROLES, World, condition_description, condition_owners
+from ..domain.roster import AIRCRAFT_COMMANDER, NAVIGATOR
+from ..domain.world import EFFECTS, World, condition_description, condition_owners
 from ..scenario import load_scenario
 from .state import MissionState, initial_state, pick_next, post_messages
 
@@ -41,13 +43,16 @@ def _hold_place(world: World) -> str:
     return "in a holding pattern"
 
 
-def parse_inject(line: str) -> dict:
+def parse_inject(line: str, callsigns: list[str] | None = None) -> dict:
     """
     Parse one evaluator line.
 
-    ``AGENT[:PRIORITY] message``    a message, as in the original console
+    ``AGENT[:PRIORITY] message``    a message to a callsign, as in the original console
     ``!effect key=value ...``       change the world (see World.apply_effect)
+
+    ``callsigns`` are the seats of the run (default: the standard crew).
     """
+    callsigns = list(callsigns or [s.callsign for s in World().roster.seats])
     line = line.strip()
     if not line:
         raise ValueError("empty inject")
@@ -65,17 +70,31 @@ def parse_inject(line: str) -> dict:
             except ValueError:
                 args[key] = value
         return {"effect": {"name": name, "args": args}}
-    head, _, body = line.partition(" ")
+    head, body = _split_target(line, callsigns)
     target, _, priority = head.partition(":")
     target, priority = target.upper(), (priority or "ROUTINE").upper()
-    if target != "ALL" and target not in ROLES:
-        raise ValueError(f"unknown agent {target!r}. Valid: {', '.join(ROLES)}, ALL")
+    if target != "ALL" and target not in callsigns:
+        raise ValueError(f"unknown agent {target!r}. Valid: {', '.join(callsigns)}, ALL")
     if priority not in PRIORITIES:
         raise ValueError(f"unknown priority {priority!r}. Valid: {', '.join(PRIORITIES)}")
     if not body.strip():
         raise ValueError("message body is empty")
-    return {"message": {"to": list(ROLES) if target == "ALL" else [target],
+    return {"message": {"to": list(callsigns) if target == "ALL" else [target],
                         "priority": priority, "body": body.strip()}}
+
+
+def _split_target(line: str, callsigns: list[str]) -> tuple[str, str]:
+    """Split ``TARGET[:PRIORITY] body``.  A target may be a callsign with a space, such as LOAD 2."""
+    upper = line.upper()
+    for callsign in sorted((c for c in callsigns if " " in c), key=len, reverse=True):
+        if upper.startswith(callsign) and len(line) > len(callsign) and line[len(callsign)] in " :":
+            rest = line[len(callsign):]
+            if rest.startswith(":"):
+                priority, _, body = rest[1:].partition(" ")
+                return f"{callsign}:{priority}", body
+            return callsign, rest.lstrip()
+    head, _, body = line.partition(" ")
+    return head, body
 
 
 def apply_injects(state: MissionState, injects: list[dict], sender: str = EVALUATOR_SENDER) -> dict:
@@ -139,9 +158,10 @@ def _advance(state: MissionState) -> Command:
                 step = float(settings["hold_step_min"])
                 world.nav.timeline_offset_min += step
                 world.aircraft.holding = True
-                owners = ["COMMANDER"]
+                roles = [AIRCRAFT_COMMANDER]
                 for cond in unmet:
-                    owners.extend(condition_owners(cond))
+                    roles.extend(condition_owners(cond))
+                owners = world.roster.callsigns_for(roles)
                 body = (
                     f"The mission timeline is holding. Next step ({item['label']}) cannot happen until: "
                     f"{'; '.join(descriptions)}. CONDOR 71 is {_hold_place(world)}. "
@@ -173,9 +193,10 @@ def _advance(state: MissionState) -> Command:
             elif kind == "waypoint":
                 world.nav.passed.append(item["name"])
                 events.append({"type": "waypoint", "t": round(world.clock_min, 2), "name": item["name"]})
-                if not item.get("silent"):
+                navigators = world.roster.callsigns_for((NAVIGATOR,))[:1]
+                if not item.get("silent") and navigators:
                     messages.append(make_message(
-                        sender=SYSTEM_SENDER, to=["NAVIGATOR"], channel=SIM, kind="system",
+                        sender=SYSTEM_SENDER, to=navigators, channel=SIM, kind="system",
                         body=f"CONDOR 71 is passing {item['name']} at T+{world.clock_min:g} min. "
                              "Make your waypoint report to COMMANDER.",
                         meta={"waypoint": item["name"]}))
@@ -206,13 +227,14 @@ async def scheduler(state: MissionState) -> Command:
     if "world" not in state:
         # Started with an empty input (for example from LangGraph Studio).
         scenario = load_scenario(os.environ.get("AIRDROP_SCENARIO") or None)
-        return Command(goto=SCHEDULER, update=initial_state(scenario, state.get("run_id")))
+        roster = bind_roster(scenario["order"]["roster"], os.environ.get("AIRDROP_CREW", "live"))
+        return Command(goto=SCHEDULER, update=initial_state(scenario, state.get("run_id"), roster))
     if state.get("status", "running") != "running":
         return Command(goto=END)
 
     settings = state["scenario"]["settings"]
     counters = state["counters"]
-    waiting = [role for role in ROLES if state["inboxes"].get(role)]
+    waiting = [seat for seat, seqs in state["inboxes"].items() if seqs]
 
     if waiting:
         clock = state["world"]["clock_min"]

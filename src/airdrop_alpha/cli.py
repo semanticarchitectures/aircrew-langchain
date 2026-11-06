@@ -26,11 +26,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from .domain.world import EFFECTS, ROLES
+from .domain.world import EFFECTS
 from .graph.scheduler import parse_inject
 from .graph.state import new_run_id
 from .observer import Observer, RunRecorder, fan_out
 from .runner import fork_state, history, open_checkpointer, run_mission, state_at
+from .order import OrderError
 from .scenario import ScenarioError, load_scenario, timeline_summary
 from .scorecard import render, score
 
@@ -39,7 +40,7 @@ console = Console(highlight=False)
 _HELP = f"""\
 [bold]Evaluator console[/bold]: the crew is quiet and the clock is stopped.
 
-  [bold]AGENT message[/bold]            inject a message      (agents: {', '.join(ROLES)}, ALL)
+  [bold]AGENT message[/bold]            inject a message      (agent: a callsign in the roster, or ALL)
   [bold]AGENT:PRIORITY message[/bold]   with ROUTINE, URGENT or EMERGENCY
   [bold]!effect key=value[/bold]        change the world      (effects: {', '.join(EFFECTS)})
   [bold](empty line)[/bold]             continue to the next quiet point
@@ -105,7 +106,7 @@ class EvaluatorConsole:
                                                "aborted": world["cargo"]["aborted"]}))
                 continue
             try:
-                injects.append(parse_inject(line))
+                injects.append(parse_inject(line, list(state.get("inboxes") or []) or None))
                 console.print(f"[magenta]queued: {line}[/magenta]")
             except ValueError as exc:
                 console.print(f"[red]{exc}[/red]")
@@ -131,6 +132,25 @@ def _check_live_credentials(crew: str) -> None:
         raise SystemExit(2)
 
 
+def _print_order(scenario: dict) -> None:
+    order = scenario["order"]
+    table = Table(title=f"Mission order {order['id']}  ({order['source']})")
+    for column in ("callsign", "agent id", "role", "position"):
+        table.add_column(column)
+    for seat in order["roster"]:
+        table.add_row(seat["callsign"], seat["agent_id"], seat["role"], seat.get("position") or "")
+    console.print(table)
+    for net in order["nets"]:
+        console.print(f"  net {net['id']} ({net['kind']}, {net['system']}): {', '.join(net['members'])}")
+    layers = ", ".join(order["operating_model"]["layers"])
+    if order["representative"]:
+        console.print(f"[yellow]Checked against {layers}. Representative, not sourced from ENSIM:[/yellow]")
+        for item in order["representative"]:
+            console.print(f"  - {item}")
+    else:
+        console.print(f"Checked against {layers}; nothing relies on the local supplement.")
+
+
 def _print_timeline(scenario: dict) -> None:
     table = Table(title=f"{scenario['name']}  ({scenario['source']})", show_lines=False)
     for column in ("T+", "kind", "what", "requires"):
@@ -153,11 +173,15 @@ async def _cmd_run(args: argparse.Namespace) -> int:
     scenario = None
     if not args.resume:
         try:
-            scenario = load_scenario(args.scenario, **overrides)
+            scenario = load_scenario(args.scenario, order=args.order, **overrides)
+        except OrderError as exc:
+            console.print(f"[red]{exc}[/red]")
+            return 2
         except ScenarioError as exc:
             console.print(f"[red]Scenario error: {exc}[/red]")
             return 2
         if args.dry_run:
+            _print_order(scenario)
             _print_timeline(scenario)
             return 0
     _check_live_credentials(args.crew)
@@ -211,11 +235,6 @@ async def _cmd_history(args: argparse.Namespace) -> int:
 
 
 async def _cmd_fork(args: argparse.Namespace) -> int:
-    try:
-        injects = [parse_inject(line) for line in args.inject or []]
-    except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
-        return 2
     _check_live_credentials(args.crew)
     new_id = args.new_run_id or f"{args.run_id}-fork-{new_run_id()[-6:]}"
     observer = Observer(silent=args.quiet, verbose=args.verbose)
@@ -226,6 +245,11 @@ async def _cmd_fork(args: argparse.Namespace) -> int:
         except ValueError as exc:
             console.print(f"[red]{exc}[/red]")
             return 1
+        try:
+            injects = [parse_inject(line, list(values.get("inboxes") or []) or None) for line in args.inject or []]
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            return 2
         start = fork_state(values, new_id=new_id, injects=injects)
         console.print(f"[dim]fork of {args.run_id} at T+{values['world']['clock_min']:g} -> run {new_id} "
                       f"({len(injects)} inject(s), crew {args.crew})[/dim]")
@@ -273,6 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="run a mission")
     run.add_argument("--scenario", help="scenario YAML (default scenarios/airdrop_alpha.yaml)")
+    run.add_argument("--order", help="mission order YAML (default: the one the scenario names)")
     run.add_argument("--crew", default="live", choices=["live", "scripted", "rogue", "eager"])
     run.add_argument("--interactive", action="store_true", help="pause for evaluator injects when the crew is quiet")
     run.add_argument("--party-line", action="store_true", help="crew overhear interphone traffic not addressed to them")
@@ -280,7 +305,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-turns", type=int, help="override the scenario's agent turn budget")
     run.add_argument("--run-id", help="name for this run (default: timestamp)")
     run.add_argument("--resume", metavar="RUN_ID", help="continue a saved run from its last checkpoint")
-    run.add_argument("--dry-run", action="store_true", help="validate the scenario and print its timeline")
+    run.add_argument("--dry-run", action="store_true",
+                     help="validate the order and scenario; print the roster, nets and timeline")
     run.add_argument("--no-db", action="store_true", help="keep checkpoints in memory only")
     run.add_argument("--json", action="store_true", help="print only the scorecard as JSON")
     common(run)

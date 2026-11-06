@@ -88,7 +88,7 @@ async def test_live_commander_turn_round_trip(scenario, fake_api):
     assert first["model"] == "claude-sonnet-4-6" and first["max_tokens"] == 4096
     system = first["system"] if isinstance(first["system"], str) else " ".join(b["text"] for b in first["system"])
     assert "Your callsign is COMMANDER." in system and "HOW THIS SIMULATION WORKS" in system
-    assert {t["name"] for t in first["tools"]} == {t.name for t in TOOLSETS["COMMANDER"]}
+    assert {t["name"] for t in first["tools"]} == {t.name for t in TOOLSETS["aircraft-commander"]}
     for tool in first["tools"]:
         assert "runtime" not in tool["input_schema"].get("properties", {})
         assert tool["description"]

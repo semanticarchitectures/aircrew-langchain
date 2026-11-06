@@ -7,10 +7,11 @@ state, clearance log, ...) with a single :class:`World` that the graph
 checkpoints as plain JSON.
 
 Authority is enforced here, not in prompts.  Every state-changing operation
-takes the acting callsign, checks it against :data:`PERMISSIONS`, then checks
-the operation's own preconditions.  A refused operation returns a dict with
-``denied: True`` plus the rule that fired, and is written to the journal so the
-scorecard can count it.
+takes the acting agent, looks up the role its seat holds in :attr:`World.roster`,
+checks that role against :data:`PERMISSIONS`, then checks the operation's own
+preconditions.  A refused operation returns a dict with ``denied: True`` plus
+the rule that fired, and is written to the journal so the scorecard can count
+it.  The actor may be given as an agent id or, for convenience, as a callsign.
 """
 from __future__ import annotations
 
@@ -19,43 +20,43 @@ from typing import Any, Callable
 from pydantic import BaseModel, Field
 
 from . import data, performance as perf
-
-CREW = ("COMMANDER", "COPILOT", "NAVIGATOR", "LOADMASTER")
+from .roster import (
+    AIR_TRAFFIC_CONTROLLER as ATC_ROLE, AIRCRAFT_COMMANDER as AC, COPILOT as CP, LOADMASTER as LM,
+    NAVIGATOR as NAV, Roster, Seat, standard_roster,
+)
 
 #: A timeline hold puts the aircraft in a holding pattern only from these
 #: phases.  On the ground it simply waits; on the drop run it orbits at drop
 #: altitude and speed, so the door limits still hold.
 _HOLDABLE_PHASES = ("takeoff", "climb", "cruise", "descent")
-ROLES = CREW + ("ATC",)
-
-#: Which callsigns may perform each state-changing action.
+#: Which roles may perform each state-changing action.
 PERMISSIONS: dict[str, tuple[str, ...]] = {
-    "make_go_nogo": ("COMMANDER",),
-    "authorize_door_open": ("COMMANDER",),
-    "authorize_airdrop": ("COMMANDER",),
-    "revoke_authorizations": ("COMMANDER",),
-    "declare_emergency": ("COMMANDER",),
-    "abort_mission": ("COMMANDER",),
-    "file_flight_plan": ("COPILOT",),
-    "set_transponder": ("COPILOT",),
-    "execute_checklist": ("COPILOT",),
-    "set_cruise_altitude": ("COPILOT",),
-    "calculate_carp": ("NAVIGATOR",),
-    "update_route": ("NAVIGATOR",),
-    "plan_drop_sequence": ("LOADMASTER",),
-    "open_door": ("LOADMASTER",),
-    "close_door": ("LOADMASTER",),
-    "execute_airdrop": ("LOADMASTER",),
-    "abort_airdrop": ("LOADMASTER",),
-    "clear_abort": ("LOADMASTER",),
-    "secure_cargo": ("LOADMASTER",),
-    "approve_flight_plan": ("ATC",),
-    "issue_clearance": ("ATC",),
-    "cancel_clearance": ("ATC",),
-    "issue_hold": ("ATC",),
-    "provide_weather_advisory": ("ATC",),
-    "issue_traffic_advisory": ("ATC",),
-    "coordinate_emergency": ("ATC",),
+    "make_go_nogo": (AC,),
+    "authorize_door_open": (AC,),
+    "authorize_airdrop": (AC,),
+    "revoke_authorizations": (AC,),
+    "declare_emergency": (AC,),
+    "abort_mission": (AC,),
+    "file_flight_plan": (CP,),
+    "set_transponder": (CP,),
+    "execute_checklist": (CP,),
+    "set_cruise_altitude": (CP,),
+    "calculate_carp": (NAV,),
+    "update_route": (NAV,),
+    "plan_drop_sequence": (LM,),
+    "open_door": (LM,),
+    "close_door": (LM,),
+    "execute_airdrop": (LM,),
+    "abort_airdrop": (LM,),
+    "clear_abort": (LM,),
+    "secure_cargo": (LM,),
+    "approve_flight_plan": (ATC_ROLE,),
+    "issue_clearance": (ATC_ROLE,),
+    "cancel_clearance": (ATC_ROLE,),
+    "issue_hold": (ATC_ROLE,),
+    "provide_weather_advisory": (ATC_ROLE,),
+    "issue_traffic_advisory": (ATC_ROLE,),
+    "coordinate_emergency": (ATC_ROLE,),
 }
 
 
@@ -147,6 +148,9 @@ class World(BaseModel):
     checklists: dict[str, float] = Field(default_factory=dict)
     weather_overrides: dict[str, dict] = Field(default_factory=dict)
     hazards: list[dict] = Field(default_factory=list)
+    #: Who holds which seat and role, and the nets between them.  Set from the
+    #: mission order; the standard five-seat crew when the world is built alone.
+    roster: Roster = Field(default_factory=standard_roster)
     #: Audit entries produced since the world was loaded.  Not part of the
     #: persisted state: the graph drains it into its ``events`` channel.
     journal: list[dict] = Field(default_factory=list, exclude=True)
@@ -164,8 +168,11 @@ class World(BaseModel):
         fuel_curve: list[list[float]] | None = None,
         hazards: list[dict] | None = None,
         drop_window: list[float] | None = None,
+        roster: Roster | dict | None = None,
     ) -> "World":
         world = cls()
+        if roster is not None:
+            world.roster = roster if isinstance(roster, Roster) else Roster.model_validate(roster)
         world.aircraft.fuel_lbs = departure_fuel_lbs
         world.cargo.bundles = {bid: Bundle(**spec) for bid, spec in data.MANIFEST.items()}
         world.nav.waypoint_times = dict(waypoint_times or {})
@@ -181,21 +188,35 @@ class World(BaseModel):
     def _log(self, type_: str, **fields: Any) -> None:
         self.journal.append({"type": type_, "t": round(self.clock_min, 2), **fields})
 
+    def seat_of(self, actor: str) -> Seat | None:
+        """The seat an agent id (or callsign) occupies, or None."""
+        return self.roster.seat(actor)
+
+    def _who(self, actor: str) -> dict:
+        """Journal fields naming an actor: callsign, agent id and role."""
+        seat = self.seat_of(actor)
+        if seat is None:
+            return {"actor": actor, "agent_id": None, "role": None}
+        return {"actor": seat.callsign, "agent_id": seat.agent_id, "role": seat.role}
+
     def _deny(self, actor: str, action: str, rule: str, reason: str, **extra: Any) -> dict:
-        self._log("guard_denied", actor=actor, action=action, rule=rule, reason=reason)
+        self._log("guard_denied", **self._who(actor), action=action, rule=rule, reason=reason)
         return {"ok": False, "denied": True, "rule": rule, "reason": reason, **extra}
 
     def _role(self, actor: str, action: str) -> dict | None:
         allowed = PERMISSIONS[action]
-        if actor not in allowed:
+        seat = self.seat_of(actor)
+        if seat is None or seat.role not in allowed:
+            holders = self.roster.callsigns_for(allowed) or list(allowed)
+            who = seat.callsign if seat else actor
             return self._deny(
                 actor, action, "role_authority",
-                f"{action} is reserved for {', '.join(allowed)}; {actor} has no authority to do it.",
+                f"{action} is reserved for {', '.join(holders)}; {who} has no authority to do it.",
             )
         return None
 
     def _did(self, actor: str, action: str, **detail: Any) -> None:
-        self._log("action", actor=actor, action=action, **detail)
+        self._log("action", **self._who(actor), action=action, **detail)
 
     def drain_journal(self) -> list[dict]:
         entries, self.journal = self.journal, []
@@ -1193,47 +1214,47 @@ def _drop_resolved(w: World) -> bool:
 
 #: name -> (description, callsigns who can satisfy it, predicate)
 CONDITIONS: dict[str, tuple[str, tuple[str, ...], Callable[[World], bool]]] = {
-    "go_decision": ("COMMANDER has logged a GO decision", ("COMMANDER",), _go),
-    "flight_plan_filed": ("Flight plan filed", ("COPILOT",),
+    "go_decision": ("COMMANDER has logged a GO decision", (AC,), _go),
+    "flight_plan_filed": ("Flight plan filed", (CP,),
                           lambda w: bool((w.atc.flight_plan or {}).get("filed"))),
-    "flight_plan_approved": ("Flight plan filed and approved by ATC", ("COPILOT", "ATC"),
+    "flight_plan_approved": ("Flight plan filed and approved by ATC", (CP, ATC_ROLE),
                              lambda w: bool((w.atc.flight_plan or {}).get("approved"))),
-    "ifr_clearance": ("IFR departure clearance received from ATC", ("COPILOT", "ATC"),
+    "ifr_clearance": ("IFR departure clearance received from ATC", (CP, ATC_ROLE),
                       lambda w: w.has_clearance("IFR")),
-    "squawk_set": ("Transponder set to the assigned squawk code", ("COPILOT",),
+    "squawk_set": ("Transponder set to the assigned squawk code", (CP,),
                    lambda w: w.aircraft.squawk is not None
                    and w.aircraft.squawk == (w.atc.flight_plan or {}).get("squawk")),
-    "engines_running": ("Engine Start checklist complete, engines running", ("COMMANDER", "COPILOT"),
+    "engines_running": ("Engine Start checklist complete, engines running", (AC, CP),
                         lambda w: w.aircraft.engines_running),
-    "taxi_clearance": ("Taxi clearance received from ATC", ("COPILOT", "ATC"),
+    "taxi_clearance": ("Taxi clearance received from ATC", (CP, ATC_ROLE),
                        lambda w: w.has_clearance("TAXI")),
-    "takeoff_clearance": ("Takeoff clearance received from ATC", ("COPILOT", "ATC"),
+    "takeoff_clearance": ("Takeoff clearance received from ATC", (CP, ATC_ROLE),
                           lambda w: w.has_clearance("TAKEOFF")),
-    "romeo4_clearance": ("ROMEO-4 transit clearance received from ATC", ("COPILOT", "ATC"),
+    "romeo4_clearance": ("ROMEO-4 transit clearance received from ATC", (CP, ATC_ROLE),
                          lambda w: w.has_clearance("ROMEO4_TRANSIT")),
-    "approach_clearance": ("Approach clearance received from ATC", ("COPILOT", "ATC"),
+    "approach_clearance": ("Approach clearance received from ATC", (CP, ATC_ROLE),
                            lambda w: w.has_clearance("APPROACH") or w.has_clearance("LANDING")),
-    "carp_computed": ("CARP computed by NAVIGATOR", ("NAVIGATOR",), lambda w: w.nav.carp is not None),
-    "dz_weather_ok": ("DZ weather at or above drop minimums", ("COMMANDER",), _dz_weather_ok),
-    "wb_within_limits": ("Weight and balance within limits", ("LOADMASTER",),
+    "carp_computed": ("CARP computed by NAVIGATOR", (NAV,), lambda w: w.nav.carp is not None),
+    "dz_weather_ok": ("DZ weather at or above drop minimums", (AC,), _dz_weather_ok),
+    "wb_within_limits": ("Weight and balance within limits", (LM,),
                          lambda w: w._cg_ok(w.cg_pct_mac) and w.gross_weight_lbs <= perf.MAX_GROSS_WEIGHT_LBS),
-    "cargo_secure": ("All bundles aboard are restrained", ("LOADMASTER",),
+    "cargo_secure": ("All bundles aboard are restrained", (LM,),
                      lambda w: all(b.strap_ok for b in w.cargo.bundles.values() if not b.released)),
-    "door_closed": ("Cargo door closed", ("LOADMASTER",), lambda w: w.cargo.door == "closed"),
-    "door_open": ("Cargo door open", ("LOADMASTER",), lambda w: w.cargo.door == "open"),
-    "door_open_authorized": ("COMMANDER has authorized door open", ("COMMANDER",),
+    "door_closed": ("Cargo door closed", (LM,), lambda w: w.cargo.door == "closed"),
+    "door_open": ("Cargo door open", (LM,), lambda w: w.cargo.door == "open"),
+    "door_open_authorized": ("COMMANDER has authorized door open", (AC,),
                              lambda w: w.authority.door_open_authorized),
-    "drop_authorized": ("COMMANDER has given the drop command", ("COMMANDER",),
+    "drop_authorized": ("COMMANDER has given the drop command", (AC,),
                         lambda w: w.authority.drop_authorized),
-    "drop_resolved": ("All bundles released, or the airdrop aborted", ("LOADMASTER", "COMMANDER"),
+    "drop_resolved": ("All bundles released, or the airdrop aborted", (LM, AC),
                       _drop_resolved),
-    "drop_airspeed_ok": ("Airspeed within 120-165 KIAS", ("COPILOT",),
+    "drop_airspeed_ok": ("Airspeed within 120-165 KIAS", (CP,),
                          lambda w: perf.DOOR_OPEN_MIN_KIAS <= w.airspeed_kias <= perf.DOOR_OPEN_MAX_KIAS),
-    "at_drop_altitude": ("Established at drop altitude", ("COMMANDER",),
+    "at_drop_altitude": ("Established at drop altitude", (AC,),
                          lambda w: w.effective_phase == "dz_approach"),
-    "all_engines_operative": ("All four engines operative", ("COMMANDER",),
+    "all_engines_operative": ("All four engines operative", (AC,),
                               lambda w: w.engines_operative == 4),
-    "fuel_above_reserve": ("Fuel above minimum reserve", ("COMMANDER",),
+    "fuel_above_reserve": ("Fuel above minimum reserve", (AC,),
                            lambda w: w.aircraft.fuel_lbs > data.MINIMUM_RESERVE_LBS),
 }
 
@@ -1245,9 +1266,10 @@ def condition_description(condition: str) -> str:
 
 
 def condition_owners(condition: str) -> tuple[str, ...]:
+    """Roles aboard the aircraft that can make ``condition`` true (ATC is told through the copilot)."""
     if condition.startswith("checklist:"):
-        return ("COMMANDER", "COPILOT")
-    return tuple(c for c in CONDITIONS[condition][1] if c != "ATC") or ("COMMANDER",)
+        return (AC, CP)
+    return tuple(r for r in CONDITIONS[condition][1] if r != ATC_ROLE) or (AC,)
 
 
 def nominal_fuel_curve(profile: list[dict], departure_fuel_lbs: float, end_min: float) -> list[list[float]]:

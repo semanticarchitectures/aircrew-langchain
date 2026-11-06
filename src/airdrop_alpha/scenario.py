@@ -7,6 +7,12 @@ self-contained: a run can be resumed, replayed or forked without the file.
 All timed things (mission phases, flight-profile segments, waypoint passages,
 injected events, the end of the run) are normalised into one ``timeline`` list
 that the scheduler walks in order.
+
+A scenario names its mission order (``order:``, relative to the scenario
+file).  The order says who is in the mission and is what the agents may know;
+the scenario is the simulator's side and the agents never see it.  The loaded
+order is checked against the scenario: callsigns, the aircraft callsign, the
+planned times, and that every role a timeline gate depends on is held.
 """
 from __future__ import annotations
 
@@ -17,8 +23,9 @@ import yaml
 
 from .domain import performance as perf
 from .domain.comms import PRIORITIES
-from .domain.world import CONDITIONS, EFFECTS, ROLES, canonical_checklist, nominal_fuel_curve
+from .domain.world import CONDITIONS, EFFECTS, canonical_checklist, nominal_fuel_curve
 from .domain import data
+from .order import default_order_path, load_order
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "hold_step_min": 2.0,
@@ -51,6 +58,9 @@ def default_scenario_path() -> Path:
 def _read(path: Path) -> dict:
     with open(path, encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
+    order = (raw.get("scenario") or {}).get("order")
+    if order:
+        raw["scenario"]["order"] = str((path.parent / order).resolve())
     if "extends" in raw:
         base = _read((path.parent / raw["extends"]).resolve())
         overlay = raw.get("scenario", {})
@@ -79,21 +89,22 @@ def _check_requires(requires: list[str], where: str) -> list[str]:
     return out
 
 
-def _recipients(value: Any, where: str) -> list[str]:
+def _recipients(value: Any, where: str, callsigns: list[str]) -> list[str]:
     names = [value] if isinstance(value, str) else list(value or [])
     out: list[str] = []
     for name in names:
-        key = str(name).strip().upper()
+        key = " ".join(str(name).strip().upper().split())
         if key == "ALL":
-            out.extend(ROLES)
-        elif key in ROLES:
+            out.extend(callsigns)
+        elif key in callsigns:
             out.append(key)
         else:
-            raise ScenarioError(f"{where}: unknown callsign {name!r}")
+            raise ScenarioError(f"{where}: unknown callsign {name!r}; the mission order has {', '.join(callsigns)}")
     return list(dict.fromkeys(out))
 
 
-def _event_item(raw: dict, phase_id: str, phase_name: str, index: int, start_agent: str) -> dict:
+def _event_item(raw: dict, phase_id: str, phase_name: str, index: int, start_agent: str,
+                callsigns: list[str]) -> dict:
     where = f"event {phase_id}[{index}]"
     effects = []
     for eff in raw.get("effects", []) or []:
@@ -112,7 +123,7 @@ def _event_item(raw: dict, phase_id: str, phase_name: str, index: int, start_age
         "id": f"event:{phase_id}:{float(raw.get('at_time', 0)):g}:{index}",
         "kind": "event", "at": float(raw.get("at_time", 0)),
         "phase_id": phase_id, "phase_name": phase_name,
-        "inject_to": _recipients(raw.get("inject_to", start_agent), where) if message else [],
+        "inject_to": _recipients(raw.get("inject_to", start_agent), where, callsigns) if message else [],
         "message": message, "priority": priority, "effects": effects,
         "requires": _check_requires(raw.get("requires", []), where),
         "label": (f"scenario event for {raw.get('inject_to', start_agent)}" if message
@@ -120,18 +131,29 @@ def _event_item(raw: dict, phase_id: str, phase_name: str, index: int, start_age
     }
 
 
-def build_scenario(raw: dict, source: str = "<dict>") -> dict:
-    """Validate a raw scenario mapping and normalise it."""
+def build_scenario(raw: dict, source: str = "<dict>", order: dict | None = None) -> dict:
+    """
+    Validate a raw scenario mapping and normalise it.  ``order`` is a validated
+    mission order; by default the one the scenario names, or the standard order.
+    """
     sc = raw.get("scenario")
     if not isinstance(sc, dict):
         raise ScenarioError(f"{source}: missing top-level 'scenario' mapping")
+    if order is None:
+        ref = sc.get("order")
+        if ref and not Path(ref).is_absolute():
+            # A relative path is relative to the scenario file (or, for a dict, to scenarios/).
+            base = Path(source).parent if Path(source).is_file() else default_order_path().parent
+            ref = base / ref
+        order = load_order(ref or default_order_path())
+    callsigns = [seat["callsign"] for seat in order["roster"]]
     settings = {**DEFAULT_SETTINGS, **(sc.get("settings") or {})}
     unknown = set(settings) - set(DEFAULT_SETTINGS)
     if unknown:
         raise ScenarioError(f"{source}: unknown settings {sorted(unknown)}")
     start_agent = str(sc.get("start_agent", "COMMANDER")).upper()
-    if start_agent not in ROLES:
-        raise ScenarioError(f"{source}: unknown start_agent {start_agent!r}")
+    if start_agent not in callsigns:
+        raise ScenarioError(f"{source}: start_agent {start_agent!r} is not a callsign in the mission order")
 
     timeline: list[dict] = []
 
@@ -149,7 +171,7 @@ def build_scenario(raw: dict, source: str = "<dict>") -> dict:
             "id": f"flight:{index}:{phase}", "kind": "flight", "at": float(seg["at"]),
             "flight_phase": phase, "heading": seg.get("heading"),
             "requires": _check_requires(seg.get("requires", []), where),
-            "notify": _recipients(seg.get("notify", []), where),
+            "notify": _recipients(seg.get("notify", []), where, callsigns),
             "message": " ".join(str(seg.get("message", "")).split()),
             "label": f"aircraft enters {phase.replace('_', ' ')}",
         })
@@ -185,7 +207,7 @@ def build_scenario(raw: dict, source: str = "<dict>") -> dict:
     names = {p["id"]: p["name"] for p in phases}
     for pid, events in events_by_phase.items():
         for index, ev in enumerate(events):
-            timeline.append(_event_item(ev, pid, names[pid], index, start_agent))
+            timeline.append(_event_item(ev, pid, names[pid], index, start_agent, callsigns))
 
     trigger = " ".join(str(sc.get("initial_trigger", "")).split())
     if trigger:
@@ -229,10 +251,14 @@ def build_scenario(raw: dict, source: str = "<dict>") -> dict:
     if drop_window and not drop_window[0] < drop_window[1] <= end_at:
         raise ScenarioError(f"{source}: drop_window must open before it closes, inside the scenario")
 
+    aircraft_callsign = str(sc.get("aircraft_callsign", order["aircraft"]["callsign"]))
+    _check_against_order(order, source, aircraft_callsign=aircraft_callsign, profile=profile,
+                         drop_window=drop_window, timeline=timeline)
+
     return {
         "name": str(sc.get("name", "unnamed")),
         "description": " ".join(str(sc.get("description", "")).split()),
-        "aircraft_callsign": str(sc.get("aircraft_callsign", data.AIRCRAFT_CALLSIGN)),
+        "aircraft_callsign": aircraft_callsign,
         "source": source,
         "start_agent": start_agent,
         "settings": settings,
@@ -245,18 +271,53 @@ def build_scenario(raw: dict, source: str = "<dict>") -> dict:
         "departure_fuel_lbs": departure_fuel,
         "fuel_curve": nominal_fuel_curve(profile, departure_fuel, end_at),
         "end_at": end_at,
+        "order": order,
     }
 
 
-def load_scenario(path: str | Path | None = None, **setting_overrides: Any) -> dict:
-    """Load and validate a scenario file.  Keyword arguments override settings."""
+def _check_against_order(order: dict, source: str, *, aircraft_callsign: str, profile: list[dict],
+                         drop_window: list[float], timeline: list[dict]) -> None:
+    """The scenario and its order must describe the same mission."""
+    problems = []
+    if aircraft_callsign.upper() != order["aircraft"]["callsign"]:
+        problems.append(f"aircraft callsign {aircraft_callsign!r} differs from the order's "
+                        f"{order['aircraft']['callsign']!r}")
+    planned = order.get("timeline") or {}
+    takeoff = next((float(s["at"]) for s in profile if s["flight_phase"] == "takeoff"), None)
+    landed = next((float(s["at"]) for s in reversed(profile[1:]) if s["flight_phase"] == "ground"), None)
+    for key, actual in (("takeoff", takeoff), ("time_over_target", drop_window[0] if drop_window else None),
+                        ("landing", landed)):
+        if key in planned and actual is not None and planned[key] != actual:
+            problems.append(f"order plans {key} at T+{planned[key]:g}, the scenario at T+{actual:g}")
+    # Every role a gate's condition involves must be seated, or the timeline can
+    # never pass that gate (a clearance needs both the copilot and ATC).
+    held = {seat["role"] for seat in order["roster"]}
+    for item in timeline:
+        for cond in item.get("requires", []):
+            owners = ("aircraft-commander", "copilot") if cond.startswith("checklist:") else CONDITIONS[cond][1]
+            missing = [role for role in owners if role not in held]
+            if missing:
+                problems.append(f"{item['label']} requires {cond}, which involves {', '.join(owners)}; "
+                                f"no seat in the order holds {', '.join(missing)}")
+    if problems:
+        raise ScenarioError(f"{source}: scenario and mission order disagree: " + "; ".join(problems))
+
+
+def load_scenario(path: str | Path | None = None, *, order: str | Path | dict | None = None,
+                  **setting_overrides: Any) -> dict:
+    """
+    Load and validate a scenario file.  ``order`` replaces the mission order the
+    scenario names (a path or a validated order).  Keyword arguments override
+    settings.
+    """
     p = Path(path) if path else default_scenario_path()
     if not p.is_file():
         raise ScenarioError(f"scenario file not found: {p}")
     raw = _read(p.resolve())
     if setting_overrides:
         raw["scenario"]["settings"] = {**(raw["scenario"].get("settings") or {}), **setting_overrides}
-    return build_scenario(raw, source=str(p))
+    loaded = order if isinstance(order, dict) else (load_order(order) if order else None)
+    return build_scenario(raw, source=str(p), order=loaded)
 
 
 def timeline_summary(scenario: dict) -> list[dict]:
