@@ -10,7 +10,7 @@ from collections import Counter
 from typing import Any
 
 from .domain import data, performance as perf
-from .domain.world import ROLES, World
+from .domain.world import World
 
 
 def _first(events: list[dict], **match: Any) -> dict | None:
@@ -177,7 +177,7 @@ def score(state: dict) -> dict:
         },
         "effort": {
             "agent_turns": counters.get("turns", 0),
-            "turns_by_agent": {r: counters.get("turns_by_agent", {}).get(r, 0) for r in ROLES},
+            "turns_by_agent": dict(counters.get("turns_by_agent", {})),
             "model_calls": counters.get("model_calls", 0),
             "tool_calls": counters.get("tool_calls", 0),
             "input_tokens": counters.get("input_tokens", 0),
@@ -187,6 +187,25 @@ def score(state: dict) -> dict:
             "cache_write_tokens": counters.get("cache_write_tokens"),
         },
         "findings": findings,
+        "roster": _roster(state),
+    }
+
+
+def _roster(state: dict) -> dict:
+    """Who flew the run: each seat's agent id, role and configuration."""
+    seats = state.get("roster")
+    order = state.get("scenario", {}).get("order") or {}
+    if not seats:
+        return {"recorded": False, "note": "run made before rosters were recorded",
+                "seats": [], "representative": []}
+    return {
+        "recorded": True,
+        "order": order.get("id"),
+        "seats": [{k: seat.get(k) for k in ("callsign", "agent_id", "role", "position", "type", "ordered_as",
+                                             "overrides") if seat.get(k) is not None} for seat in seats],
+        "configurations": sorted({seat["type"] for seat in seats if seat.get("type")}),
+        "manifests": {seat["type"]: seat["manifest"] for seat in seats if seat.get("manifest")},
+        "representative": list(order.get("representative") or []),
     }
 
 
@@ -224,6 +243,10 @@ def render(card: dict) -> str:
            f"{effort['cache_write_tokens']:,})" if effort.get("cache_read_tokens") is not None
            and effort["input_tokens"] else ""),
     ]
+    roster = card.get("roster") or {}
+    if roster.get("recorded"):
+        lines.append(f"  Roster             {', '.join(roster['configurations'])}: "
+                     + ", ".join(f"{s['callsign']}={s['agent_id']}" for s in roster["seats"]))
     if card["findings"]:
         lines.append("  Findings")
         lines.extend(f"    - {finding}" for finding in card["findings"])

@@ -1,0 +1,31 @@
+# Local supplement to ENSIM's operating model (operating_model/ensim@aa7b714/).
+#
+# Roles and communication links this simulation needs that ENSIM does not
+# record at that commit.  Nothing here comes from a publication: every entry
+# is representative, and a mission order that relies on one is reported as
+# such when it is validated.  ENSIM records are never redefined here.
+
+roles:
+  - id: navigator
+    name: Navigator
+    reports_to: aircraft-commander
+    note: >
+      The original airdrop-alpha scenario carries a navigator. The C-130J it
+      names flies with two pilots and a loadmaster, and ENSIM Mission 1 (C-17)
+      has no navigator either, so this seat belongs to the fictional scenario
+      only.
+
+links:
+  - role: copilot
+    system: aircraft-intercom-system
+    note: >
+      ENSIM records intercom traffic for the aircraft commander and the
+      loadmaster only.
+  - role: copilot
+    system: tactical-communications-system
+    note: >
+      ENSIM puts the aircraft commander, not the copilot, on the radio to ATC.
+      In this scenario the copilot works the radio, as in the original.
+  - role: navigator
+    system: aircraft-intercom-system
+    note: The navigator role is itself local.

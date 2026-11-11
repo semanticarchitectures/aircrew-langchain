@@ -1,0 +1,45 @@
+# Mission order: Operation AIRDROP ALPHA
+#
+# What the crew may know about this mission: who flies it, how they talk,
+# and the plan.  The scenario (airdrop_alpha.yaml) names this order and holds
+# what the crew must not see: hazards, injected faults and simulator settings.
+#
+# Format: docs/mission-order.md.  Roles are checked against ENSIM's operating
+# model at aa7b714 plus operating_model/local.yaml; anything that relies on
+# the local file is reported as representative when the order is validated
+# (airdrop run --dry-run).
+
+order:
+  id: airdrop-alpha
+  name: Operation AIRDROP ALPHA
+  classification: UNCLASSIFIED - FICTIONAL DEMONSTRATION
+  aircraft: {callsign: CONDOR 71, type: C-130J (representative)}
+  operating_model: [ensim@aa7b714, local]
+
+  # id: <Type>V<version>.Instance<n> names the agent configuration in the seat.
+  # GeneralistV1 is the configuration flown in live1 and live2.
+  roster:
+    - {id: GeneralistV1.Instance1, role: aircraft-commander,     callsign: COMMANDER,  position: Aircraft commander}
+    - {id: GeneralistV1.Instance2, role: copilot,                callsign: COPILOT,    position: Copilot; works the radio}
+    - {id: GeneralistV1.Instance3, role: navigator,              callsign: NAVIGATOR,  position: Navigator}
+    - {id: GeneralistV1.Instance4, role: loadmaster,             callsign: LOADMASTER, position: Loadmaster}
+    - {id: GeneralistV1.Instance5, role: air-traffic-controller, callsign: ATC,        position: Alpha Approach controller}
+
+  nets:
+    - id: interphone
+      kind: interphone
+      system: aircraft-intercom-system
+      control: COMMANDER
+      members: [COMMANDER, COPILOT, NAVIGATOR, LOADMASTER]
+    - id: approach
+      kind: radio
+      system: tactical-communications-system
+      frequency: 124.35 MHz
+      members: [COPILOT, ATC]
+
+  route: [KIRO, WPT ALPHA, WPT BRAVO, DZ-ALPHA, WPT CHARLIE, KIRO]
+  drop_zone: DZ-ALPHA
+  cargo: [B-01, B-02, B-03, B-04, B-05]
+
+  # Planned minutes from the start of the mission.
+  timeline: {takeoff: 12, time_over_target: 64, landing: 110}

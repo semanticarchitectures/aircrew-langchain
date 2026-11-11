@@ -15,9 +15,12 @@ from langgraph.types import Command
 
 from .agents.factory import build_crew
 from .agents.playbooks import PLAYBOOKS, scripted_models
+from .agents.scripted import ScriptedChatModel
+from .agents.types import bind_roster
 from .graph.build import build_graph
 from .graph.scheduler import SCHEDULER, apply_injects
 from .graph.state import initial_state, new_run_id
+from .order import load_order, roster_model
 from .scenario import load_scenario
 from .scorecard import score
 
@@ -33,17 +36,30 @@ class RunResult:
     interrupted: bool = False
 
 
-def make_crew(scenario: dict, crew: Any = "scripted") -> dict[str, Any]:
+def make_roster(scenario: dict, crew: Any = "scripted") -> list[dict]:
+    """The run's roster: the ordered seats bound to the agents ``crew`` puts in them."""
+    return bind_roster(scenario["order"]["roster"], crew)
+
+
+def make_crew(scenario: dict, crew: Any = "scripted", roster: list[dict] | None = None) -> dict[str, Any]:
     """
-    ``crew`` is "live" (models from the environment), the name of a scripted
-    playbook ("scripted", "rogue"), or anything agents.factory.resolve_models
-    accepts (a model string, a chat model, or a role -> model dict).
+    One agent per seat, keyed by callsign.
+
+    ``crew`` is "live" (each seat's agent type, models from the environment),
+    the name of a scripted playbook ("scripted", "rogue", "eager"), or anything
+    agents.factory.resolve_models accepts (a model string, a chat model, or a
+    callsign -> model dict).  A playbook scripts named callsigns; a seat it
+    does not script stays silent.
     """
+    seats = roster if roster is not None else make_roster(scenario, crew)
     if crew == "live":
-        return build_crew(scenario)
+        return build_crew(scenario, None, seats)
     if isinstance(crew, str) and crew in PLAYBOOKS:
-        return build_crew(scenario, scripted_models(crew))
-    return build_crew(scenario, crew)
+        book = scripted_models(crew)
+        models = {seat["callsign"]: book.get(seat["callsign"])
+                  or ScriptedChatModel(role=seat["callsign"], playbook=[]) for seat in seats}
+        return build_crew(scenario, models, seats)
+    return build_crew(scenario, crew, seats)
 
 
 @contextlib.asynccontextmanager
@@ -123,31 +139,107 @@ async def run_mission(
     if resume:
         if not run_id:
             raise ValueError("resume needs the run_id of the run to continue")
-        probe = build_graph(make_crew(load_scenario(), "scripted"), checkpointer=checkpointer)
-        saved = await probe.aget_state(run_config(run_id))
-        if not saved.values:
-            raise ValueError(f"no checkpoint found for run {run_id!r}")
-        scenario_dict = saved.values["scenario"]
+        saved_values = _upgrade_legacy(await _saved_values(run_id, checkpointer))
+        scenario_dict = saved_values["scenario"]
+        roster = saved_values.get("roster") or make_roster(scenario_dict, crew)
+        _check_same_crew(run_id, roster, make_roster(scenario_dict, crew))
         first_input: Any = None
     else:
         if start_state is not None:
+            start_state = _upgrade_legacy(start_state)
             scenario_dict = start_state["scenario"]
         else:
             scenario_dict = scenario if isinstance(scenario, dict) else load_scenario(scenario)
         run_id = run_id or (start_state or {}).get("run_id") or new_run_id()
-        first_input = start_state if start_state is not None else initial_state(scenario_dict, run_id)
+        if start_state is not None:
+            roster = make_roster(scenario_dict, crew)
+            first_input = _with_crew(start_state, roster)
+        else:
+            roster = make_roster(scenario_dict, crew)
+            first_input = initial_state(scenario_dict, run_id, roster)
         first_input = {**first_input, "run_id": run_id}
 
-    graph = build_graph(make_crew(scenario_dict, crew), checkpointer=checkpointer)
+    graph = build_graph(make_crew(scenario_dict, crew, roster), checkpointer=checkpointer)
     config = run_config(run_id, scenario_dict)
     interrupted = await _drive(graph, first_input, config, on_update, on_interrupt)
     values = (await graph.aget_state(config)).values
     return RunResult(run_id=run_id, state=values, scorecard=score(values), interrupted=interrupted)
 
 
+def _upgrade_legacy(values: dict) -> dict:
+    """Runs saved before mission orders existed flew the standard order; give them one."""
+    if "order" in values.get("scenario", {}):
+        return values
+    upgraded = dict(values)
+    upgraded["scenario"] = {**values["scenario"], "order": load_order()}
+    return upgraded
+
+
+def _with_crew(state: dict, roster: list[dict]) -> dict:
+    """
+    A fork may put different agents in the seats (that is how one configuration
+    is compared with another from the same point).  The new binding replaces
+    the old one in the state, and the change is recorded.
+    """
+    before = [(s["callsign"], s.get("agent_id")) for s in state.get("roster") or []]
+    after = [(s["callsign"], s["agent_id"]) for s in roster]
+    if before == after:
+        return state
+    updated = dict(state)
+    updated["roster"] = roster
+    world = dict(state["world"])
+    world["roster"] = roster_model(state["scenario"]["order"], roster)
+    updated["world"] = world
+    updated["events"] = list(state.get("events") or []) + [{
+        "type": "crew_bound", "t": world.get("clock_min"),
+        "seats": {c: {"from": dict(before).get(c), "to": a} for c, a in after}}]
+    return updated
+
+
+def _check_same_crew(run_id: str | None, recorded: list[dict], requested: list[dict]) -> None:
+    """A resumed or forked run must be flown by the agent types it was started with."""
+    was = [(s["callsign"], s.get("type")) for s in recorded]
+    now = [(s["callsign"], s.get("type")) for s in requested]
+    if any(t is None for _, t in was) or was == now:
+        return
+    raise ValueError(f"run {run_id!r} was flown by {', '.join(sorted({t for _, t in was}))}; continue it with "
+                     f"the same crew (asked for {', '.join(sorted({t for _, t in now}))})")
+
+
+async def _probe_graph(run_id: str, checkpointer: Any):
+    """A graph with the saved run's seats, for reading its checkpoints."""
+    values = None
+    async for item in checkpointer.alist(run_config(run_id), limit=1):
+        values = item.checkpoint.get("channel_values") or {}
+    if values is None:
+        raise ValueError(f"no checkpoint found for run {run_id!r}")
+    if values.get("roster"):
+        callsigns = [seat["callsign"] for seat in values["roster"]]
+    elif values.get("inboxes"):
+        callsigns = list(values["inboxes"])          # runs saved before rosters were recorded
+    else:
+        callsigns = [seat["callsign"] for seat in load_scenario()["order"]["roster"]]
+    return build_graph({c: _NoAgent() for c in callsigns}, checkpointer=checkpointer)
+
+
+class _NoAgent:
+    """Stands in for an agent in a graph that only reads checkpoints."""
+
+    async def ainvoke(self, *_: Any, **__: Any) -> dict:  # pragma: no cover - never run
+        raise RuntimeError("this graph only reads checkpoints")
+
+
+async def _saved_values(run_id: str, checkpointer: Any) -> dict:
+    probe = await _probe_graph(run_id, checkpointer)
+    saved = await probe.aget_state(run_config(run_id))
+    if not saved.values:
+        raise ValueError(f"no checkpoint found for run {run_id!r}")
+    return saved.values
+
+
 async def history(run_id: str, checkpointer: Any) -> list[dict]:
     """Checkpoints of a run, oldest first."""
-    graph = build_graph(make_crew(load_scenario(), "scripted"), checkpointer=checkpointer)
+    graph = await _probe_graph(run_id, checkpointer)
     rows = []
     async for snap in graph.aget_state_history(run_config(run_id)):
         values = snap.values or {}
@@ -177,7 +269,7 @@ async def state_at(run_id: str, checkpointer: Any, *, checkpoint_id: str | None 
     With ``at_clock``, the last such checkpoint at or before that sim time.
     With neither argument, the latest checkpoint.
     """
-    graph = build_graph(make_crew(load_scenario(), "scripted"), checkpointer=checkpointer)
+    graph = await _probe_graph(run_id, checkpointer)
     best = None
     async for snap in graph.aget_state_history(run_config(run_id)):
         values = snap.values or {}

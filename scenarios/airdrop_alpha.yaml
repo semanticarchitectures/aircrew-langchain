@@ -11,9 +11,15 @@
 #
 # Conditions usable in `requires` are listed in domain/world.py (CONDITIONS),
 # plus `checklist:<NAME>`.
+#
+# This file is the simulator's side of the mission and the crew never see it.
+# What they may know (roster, nets, route, cargo, planned times) is in the
+# mission order it names.  Callsigns used here must be in that order.
 
 scenario:
   name: Operation AIRDROP ALPHA
+  # Who flies the mission and what they may know: see the order file.
+  order: airdrop_alpha.order.yaml
   description: >
     Single-leg airdrop mission. CONDOR 71 departs KIRO, delivers five
     humanitarian supply bundles to DZ-ALPHA, and returns to KIRO.

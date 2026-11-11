@@ -1,0 +1,200 @@
+[
+  {
+    "id": "c-17-airlift-aircraft",
+    "name": "C-17 Globemaster III (representative airlift aircraft)",
+    "type": "Aircraft",
+    "description": "Represents the tasked C-17 sortie's airframe as a node in the mission execution interaction network. Deliberately generic — no specific tail number, avionics, or classified capability detail; only the public, unclassified mission profile (tactical airlift and airdrop) is represented.",
+    "doctrineSource": [
+      {
+        "publication": "C-17 Globemaster III Air Force Fact Sheet",
+        "url": "https://www.af.mil/About-Us/Fact-Sheets/Display/Article/1529726/c-17-globemaster-iii/",
+        "note": "Content (mission: rapid strategic delivery of troops/cargo, capable of tactical airlift and airdrop missions) confirmed via web search on 2026-09-07; the af.mil page itself could not be directly fetched from this session's environment (network-level 403 on all .mil domains, not content-specific — see air-traffic-controller role's doctrineSource note for the same constraint)."
+      }
+    ]
+  },
+  {
+    "id": "tactical-communications-system",
+    "name": "Tactical Communications System (representative)",
+    "type": "Communications",
+    "description": "Represents the voice/data communications means used by aircrew, ATC, and ground drop-zone personnel to coordinate during mission execution. Generic and representative only — no real radio system, frequency, or crypto detail is modeled, consistent with the classification boundary (AGENTS.md Section 3).",
+    "commsLink": {
+      "mode": "Verbal",
+      "medium": "UHF/VHF AM air-to-ground voice radio net"
+    },
+    "doctrineSource": [
+      {
+        "publication": "AFDP 3-0.1",
+        "note": "Command and Control doctrine establishes that C2 depends on communications connectivity between echelons; this record represents that general concept at the execution level, not a specific real communications system. Air traffic control and aircrew-to-ground tactical coordination is voice radio by well-established, unclassified convention (ICAO/FAA and military ATC doctrine alike) — the commsLink.mode/medium reflect that general, not-mission-specific fact, not a new citation."
+      }
+    ]
+  },
+  {
+    "id": "dz-safety-of-flight-radio-net",
+    "name": "Drop Zone Safety-of-Flight Radio Net (UHF/VHF voice)",
+    "type": "Communications",
+    "description": "The voice radio channel between the Drop Zone Support Team and the drop aircraft. Deliberately limited-traffic by doctrine, not general coordination chatter: used for safety-of-flight matters (ATC directions, range clearance, unsafe surface conditions, mission changes) and to pass surface wind/limited weather observations. Mandatory for IMC/AWADS (instrument) drops; for standard visual drops, radio contact is used as needed rather than continuously. Represents a class of man-portable UHF/VHF AM radio (e.g. PRC-113-class equipment) generically — no specific real radio's exact frequency or crypto detail is modeled, consistent with the classification boundary (AGENTS.md Section 3).",
+    "commsLink": {
+      "mode": "Verbal",
+      "medium": "UHF/VHF AM voice radio (representative class, e.g. PRC-113-class man-portable equipment), line-of-sight air-to-ground"
+    },
+    "doctrineSource": [
+      {
+        "publication": "FM 57-38, Chapter 6, Drop Zones",
+        "url": "https://www.globalsecurity.org/military/library/policy/army/fm/57-38/Ch6.htm",
+        "note": "Army field manual, publicly mirrored on globalsecurity.org. Confirmed via web search on 2026-09-07 that: radio contact with the drop aircraft is limited to safety-of-flight requirements or issues affecting airborne force employment; the DZST passes surface wind/limited weather observations to inbound aircraft when radio contact is made; radio contact is mandatory for IMC/AWADS operations. Direct fetch of the page itself returned a 403 to this session's automated request — content is corroborated via search-result synthesis rather than an independent full read, and should be re-verified against the primary source before treating any additional specific claim from it as fact. commsLink is this dataset's structuring of the same 'UHF/VHF voice radio' fact already in this record's name/description, not a new claim."
+      }
+    ]
+  },
+  {
+    "id": "digital-situational-awareness-system",
+    "name": "Digital Situational Awareness System (ATAK-class, representative)",
+    "type": "Communications",
+    "description": "Represents a modern geospatial/situational-awareness capability in the style of ATAK (Android Team Awareness Kit) — a real, unclassified-discussable, DoD-adopted Android application (originally developed by the Air Force Research Laboratory) used for sharing positions, markers, and zone data via its Cursor on Target (CoT) protocol. Typically bearer-agnostic — cellular, satellite, or tactical mesh radio (e.g. Persistent Systems Wave Relay, Silvus-class MANET radios) rather than consumer Wi-Fi. Included as a plausible modern complement to the doctrinal voice radio net above. IMPORTANT: no source found this session documents ATAK specifically being used for CDS/airdrop drop-zone coordination in official Air Force materiel — this System is representative/illustrative only, not a doctrinally confirmed capability for this mission type.",
+    "commsLink": {
+      "mode": "Digital",
+      "medium": "cellular, satellite, or tactical mesh radio (MANET) — e.g. Persistent Systems Wave Relay- or Silvus-class radios; not consumer Wi-Fi",
+      "protocol": "Cursor on Target (CoT), typically transported over UDP or TCP",
+      "format": "CoT XML event schema (point/position, marker, and zone data)"
+    },
+    "doctrineSource": [
+      {
+        "publication": "Android Team Awareness Kit (ATAK) — general program information",
+        "note": "ATAK's existence, DoD adoption (~40,000 DoD users per public sources), AFRL origin, and Cursor on Target (CoT) data protocol are confirmed via multiple corroborating public/unclassified sources as of 2026-09-07 (Wikipedia, DHS media library, civtak.org, and DTIC technical report ADA617401, 'Improving Situation Awareness with the Android Team Awareness Kit'). Its application to CDS/airdrop drop-zone coordination specifically is NOT confirmed by any source found this session — modeled here as a plausible representative capability only, per the user's own question about whether this technology applies, not as a verified doctrinal fact. The commsLink protocol/format (CoT XML over UDP/TCP) and bearer options are the confirmed, general ATAK/CoT facts; their application to this specific drop-zone link is the same representative/illustrative caveat as the rest of this record."
+      }
+    ]
+  },
+  {
+    "id": "identity-access-control-system",
+    "name": "Identity and Access Control System (representative)",
+    "type": "SecurityAccessControl",
+    "description": "Represents the identity/credential/access-control function personnel authenticate against to use mission-relevant systems (e.g. communications, mission planning/tasking data). Deliberately generic — modeled on the general DoD ICAM (Identity, Credential, and Access Management) policy concept, not any specific real fielded system.",
+    "commsLink": {
+      "mode": "Digital",
+      "medium": "DoD enterprise network (representative — a NIPRNet/SIPRNet-class network is the real-world analogue, not modeled specifically)",
+      "protocol": "PKI/CAC (Common Access Card) certificate-based authentication — the standard, publicly documented DoD ICAM mechanism",
+      "format": "authentication transaction (representative — no specific real system's message format is modeled)"
+    },
+    "doctrineSource": [
+      {
+        "publication": "DoDI 8520.04, Access Management for DoD Information Systems",
+        "note": "Confirmed as a real, public, unclassified DoD instruction governing access management for DoD information systems via web search on 2026-09-07; the primary-source PDF (esd.whs.mil) could not be directly fetched from this session's environment (network-level 403). Cited for the general ICAM policy concept only — this System record does not represent any specific real system's implementation. PKI/CAC as the standard DoD authentication mechanism is a well-documented, unclassified, publicly discussable fact (DoD Common Access Card program) added to commsLink.protocol for the same general-concept reason, not a new specific-system claim."
+      }
+    ]
+  },
+  {
+    "id": "aircraft-intercom-system",
+    "name": "Aircraft Intercommunication System (ICS, representative)",
+    "type": "Communications",
+    "description": "Represents the wired, point-to-point voice intercom connecting flight-deck and cargo-compartment crew positions aboard the tasked aircraft — the channel the Aircraft Commander and Loadmaster (and, on Mission 3, the Flight Nurse/Medical Crew Director) actually use for in-flight verbal coordination, as distinct from the aircraft's external voice radio nets (tactical-communications-system, dz-safety-of-flight-radio-net) used to talk to ATC and ground personnel. Deliberately generic — no specific real aircraft's intercom system, panel, or crypto detail is modeled, consistent with the classification boundary (AGENTS.md Section 3).",
+    "commsLink": {
+      "mode": "Verbal",
+      "medium": "wired aircraft intercom (analog, point-to-point voice between crew stations)"
+    },
+    "doctrineSource": [
+      {
+        "publication": "General multi-crew military aircraft equipment concept",
+        "note": "Aircrew intercommunication systems (ICS) are standard, publicly documented equipment on multi-crew military aircraft (referenced generically in unclassified technical/training materials and by the c17pilot.com source already cited for the Loadmaster's 'Mark'/'Cargo away' call-and-response); no specific real aircraft's ICS implementation is modeled here, and this record exists to give that already-described intercom-mediated flight-deck/cargo-compartment link a distinct, verbal-mode System of its own rather than leaving it as description-only text."
+      }
+    ]
+  },
+  {
+    "id": "toc-l-tactical-data-link",
+    "name": "TOC-L Tactical Data Link (representative)",
+    "type": "Communications",
+    "description": "Represents TOC-L's digital connection to the tasked aircraft used to deliver the UAV flight-plan/launch-sequence data referenced in toc-l-informs-loadmaster-of-uav-flight-plan — a specific instance of TOC-L's real, documented general function of 'connecting to aircraft and other C2 agencies.' Deliberately generic — no specific real tactical data link, waveform (e.g. Link 16), or crypto detail is modeled, consistent with the classification boundary (AGENTS.md Section 3).",
+    "commsLink": {
+      "mode": "Digital",
+      "medium": "tactical data link (representative — TOC-L's real function is documented as connecting to aircraft and other C2 agencies; the specific link/waveform is not named in any public source found this session)",
+      "protocol": "representative — no specific real tactical data link protocol (e.g. Link 16) is confirmed for this hop",
+      "format": "structured UAV flight-plan / launch-sequence data (representative)"
+    },
+    "doctrineSource": [
+      {
+        "publication": "\"Air Force TOC-L enhances joint force C2\"",
+        "note": "Same verification status as the toc-l C2Node record's citation — TOC-L's real, general 'connects to aircraft and other C2 agencies' function is confirmed; this record's specific characterization as a digital tactical data link carrying UAV flight-plan data is this mission's own fictional extension (see toc-l C2Node and toc-l-informs-loadmaster-of-uav-flight-plan interaction), stated explicitly rather than presented as a documented TOC-L capability."
+      }
+    ]
+  },
+  {
+    "id": "patient-movement-tasking-system",
+    "name": "Patient Movement Tasking/Manifest System (representative)",
+    "type": "Communications",
+    "description": "Represents the digital tasking/manifest channel the TPMRC uses to deliver a validated Patient Movement Request (PMR) and patient manifest to the tasked AE crew ahead of the mission (see tpmrc-informs-mcd-of-validated-manifest). Deliberately generic — this dataset does not name a specific real DoD patient-movement C2 system (e.g. any TRANSCOM regulating/tasking system), consistent with the classification boundary (AGENTS.md Section 3); only the general, doctrinally confirmed PMR-validation-and-dissemination process (see tpmrc C2Node record) is represented.",
+    "commsLink": {
+      "mode": "Digital",
+      "medium": "DoD patient-movement tasking network (representative)",
+      "protocol": "representative — no specific real system's transport protocol is named",
+      "format": "structured Patient Movement Request (PMR) / patient manifest data (representative)"
+    },
+    "doctrineSource": [
+      {
+        "publication": "USTRANSCOM patient movement doctrine (via web search synthesis)",
+        "note": "Same verification status as the tpmrc C2Node record's citation — the general PMR validation/dissemination process is confirmed; this record's specific characterization of that hand-off as a named digital tasking/manifest system is this dataset's representative structuring of that process, not a specific real system."
+      }
+    ]
+  },
+  {
+    "id": "cds-airdrop-mechanism",
+    "name": "Container Delivery System (CDS) Release Mechanism",
+    "type": "AirdropMechanism",
+    "description": "The rigging/release mechanism the Loadmaster operates to release CDS bundles over the drop zone. Same doctrinal basis already cited for the Loadmaster role's CDS rigging/release responsibility.",
+    "doctrineSource": [
+      { "publication": "DAFMAN 13-217", "section": "Drop-Zone and Landing-Zone Operations" }
+    ]
+  },
+  {
+    "id": "rapid-dragon-palletized-effects-system",
+    "name": "Rapid Dragon-class Palletized Effects Deployment System",
+    "type": "AirdropMechanism",
+    "description": "A real, unclassified, publicly documented AFRL/USAF capability (program of record name: 'Dragon Cart'): a disposable, roll-on/roll-off deployment box that lets unmodified cargo aircraft (C-17, C-130, EC-130) airdrop palletized effects using standard aerial-delivery/CDS-style extraction, with no aircraft modification required. Originally demonstrated with palletized cruise missiles (JASSM-ER surrogates, 2021 C-17/EC-130 system-level tests), AFRL has since publicly stated the program is expanding from 'Palletized Munitions' to 'Palletized Effects' — explicitly including ISR platforms and humanitarian aid delivery. This mission's use of it to deploy ISR UAVs in a humanitarian-relief context is directly aligned with that stated public program direction, not a fictional stretch of an unrelated system.",
+    "doctrineSource": [
+      {
+        "publication": "Air Force Research Laboratory, \"Rapid Dragon\" / \"Palletized Effects\"",
+        "url": "https://afresearchlab.com/rapid-dragon-delivers-long-range-strike-from-cargo-aircraft/",
+        "note": "Directly fetched from afresearchlab.com on 2026-09-07 (not a .mil domain, reachable this session). Direct quote: 'Palletized Effects has the potential to assist in multiple scenarios on the spectrum of conflict ranging from humanitarian relief to kinetic effects,' and Rapid Dragon 'is also expanding its Palletized Effects with Foreign Partners & Allies, which includes kinetic and non-kinetic effects; intelligence, surveillance, and reconnaissance (ISR) platforms; contested logistics / cargo resupply.' Corroborated by Lockheed Martin's press release and Air & Space Forces Magazine coverage of the 2021 C-17 system-level demonstration and the 'Dragon Cart' program-of-record name."
+      }
+    ]
+  },
+  {
+    "id": "long-endurance-isr-uav",
+    "name": "Long-Endurance ISR/Comms-Relay UAV (representative)",
+    "type": "Aircraft",
+    "description": "Represents the class of long-endurance unmanned aircraft deployed via the Rapid Dragon-class system, carrying a mixture of communications-relay and sensor payloads to form a distributed network providing intelligence and C2 support to the relief effort. Deliberately generic — no specific real UAV platform, sensor, or communications-payload specification is modeled, consistent with the classification boundary (AGENTS.md Section 3). AFRL's public 'Palletized Effects' materials mention proposals for airdropping large numbers of small UAVs per pallet for roles including reconnaissance and precision navigation/timing, but do not name a specific long-endurance ISR/comms-relay platform — this record's specific characterization (long-endurance, mixed comms+sensor payload, forming a network) is this mission's own representative design choice, not drawn from a single named real system.",
+    "doctrineSource": [
+      {
+        "publication": "Air Force Research Laboratory, \"Rapid Dragon\" / \"Palletized Effects\"",
+        "note": "Same verification status as the rapid-dragon-palletized-effects-system System record's citation — general UAV-deployment-via-palletized-effects concept confirmed; the specific long-endurance/mixed-payload/networked characterization here is representative, not a named real platform."
+      }
+    ]
+  },
+  {
+    "id": "ae-patient-care-equipment",
+    "name": "Aeromedical Evacuation Patient Care Equipment (representative)",
+    "type": "MedicalEquipment",
+    "description": "Represents the Patient Movement Items (PMI) and patient-care equipment configured into the tasked aircraft's cargo compartment for an AE mission: litter stanchions, oxygen distribution, and patient monitoring equipment. Deliberately generic — no specific real equipment model or medical-device specification is modeled, consistent with the classification boundary (AGENTS.md Section 3). The Flight Nurse (Medical Crew Director) operates/configures this equipment; the Aeromedical Evacuation Technician monitors patients via it.",
+    "doctrineSource": [
+      {
+        "publication": "AFI 48-307 / DAFI 48-107 series; general Patient Movement Items (PMI) concept",
+        "note": "The general concept of a standardized patient-care/litter-configuration kit for AE missions is well established in public USAF AE materials (career-field descriptions, AES public affairs coverage) confirmed via web search on 2026-09-09. No specific PMI equipment model or medical-device specification is drawn from any source — this record is deliberately representative only, same pattern as this dataset's other equipment-class System records."
+      }
+    ]
+  },
+  {
+    "id": "jaawin-weather-distribution-system",
+    "name": "JAAWIN-class Weather Data Distribution System (representative)",
+    "type": "WeatherSystem",
+    "description": "Represents the class of web-based weather product dissemination system in the style of JAAWIN (Joint Air Force and Army Weather Information Network) — a real, publicly documented system distributing text observations, analyses, forecasts, and tailored products (METAR, TAF, PIREP, SIGMET, NOTAM, winds aloft) to Operational Weather Squadrons, Combat Weather Teams, AOCs, and field/fixed-base users, sourced from centralized Air Force Weather production. Represents the continuous weather data stream flowing from production (17th OWS) through the AOC's Weather Support Team and, via in-flight datalink, to the tasked aircraft — the same class of system carries weather data from mission planning through the duration of execution. Deliberately generic — no specific real network architecture, bandwidth, or classification-level detail is modeled, consistent with the classification boundary (AGENTS.md Section 3).",
+    "commsLink": {
+      "mode": "Digital",
+      "medium": "DoD/public web (HTTPS) content-delivery network for ground-based access; in-flight leg via SATCOM-class aviation datalink (representative)",
+      "protocol": "web-based (HTTPS) product delivery on the ground; in-flight datalink transport protocol not modeled as a specific real protocol",
+      "format": "TAC (Traditional Alphanumeric Code) plain-text products — METAR, TAF, PIREP, SIGMET, NOTAM, winds aloft"
+    },
+    "doctrineSource": [
+      {
+        "publication": "Joint Air Force and Army Weather Information Network (JAAWIN) — general program information",
+        "note": "JAAWIN's existence, web-based interface, ~8 million hits/month, and role distributing raw/processed weather data to OWS/Combat Weather Teams/field and fixed-base users is confirmed via multiple corroborating public sources as of 2026-09-10 (AMS conference paper, AcronymFinder, Air Force Weather Agency background materials). Its specific use for real-time in-flight datalink delivery to a tasked aircraft (as opposed to pre-flight/fixed-base access) is this dataset's reasonable extension of the general concept — commercial aviation datalink weather delivery (METAR/TAF/PIREP/SIGMET/NOTAM/winds aloft via SATCOM) is well documented and used here as the structural analogue, not a confirmed military-specific implementation detail. TAC plain-text format for these product types (METAR/TAF/PIREP/SIGMET/NOTAM/winds aloft) is standard, publicly documented aviation-weather convention, not specific to JAAWIN."
+      }
+    ]
+  }
+]

@@ -2,7 +2,7 @@
 import pytest
 
 from airdrop_alpha.domain import data, performance as perf
-from airdrop_alpha.domain.world import PERMISSIONS, ROLES, World
+from airdrop_alpha.domain.world import PERMISSIONS, World
 
 from .conftest import ready_for_drop
 
@@ -101,11 +101,11 @@ def test_every_state_changing_action_checks_the_actor(world):
     }
     assert set(calls) == set(PERMISSIONS)
     for action, call in calls.items():
-        for role in ROLES:
-            if role in PERMISSIONS[action]:
+        for seat in world.roster.seats:
+            if seat.role in PERMISSIONS[action]:
                 continue
-            result = call(role)
-            assert result.get("denied") and result["rule"] == "role_authority", (action, role, result)
+            result = call(seat.agent_id)
+            assert result.get("denied") and result["rule"] == "role_authority", (action, seat.callsign, result)
 
 
 def test_door_needs_authorization_and_drop_speed(world):

@@ -1,0 +1,19 @@
+ENSIM (Enterprise Simulation Framework)
+Copyright [YEAR] [YOUR NAME OR ORGANIZATION — fill in before first public commit]
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes design-philosophy references to, but does not vendor
+or redistribute code from, the following third-party works:
+
+  - Open-Arsenal / ModularAF (github.com/open-arsenal), maintained by the
+    USAF AFLCMC Architecture & Standards Engineering office. Marked
+    "Government Owned" in its own repositories, not a standard OSI license.
+    ENSIM cites its UCI/OMS design philosophy (see
+    docs/architecture/ARCHITECTURE.md Section 5) but does not copy schema
+    fragments from it. Verify licensing independently before any more
+    direct reuse than what's already described there.
+
+This product depends on, but does not modify or redistribute, Portico
+(github.com/openlvc/portico), licensed under the Common Distribution and
+Developer License (CDDL). See docs/architecture/portico-setup.md.

@@ -1,8 +1,10 @@
 """
-Build the five agents with LangChain's ``create_agent``.
+Build one agent per seat with LangChain's ``create_agent``.
 
-Each agent is a role prompt, the tools that role is allowed to hold, and a
-model.  The per-turn context (the world copy, the outbox) arrives through
+Each agent is the prompt for its seat's role, the tools that role holds, and a
+model.  The seats come from the run's roster (agents.types.bind_roster); the
+prompt set and the default model come from the seat's agent type.  The
+per-turn context (the world copy, the outbox) arrives through
 ``context_schema``; the agents keep no state of their own between turns.
 """
 from __future__ import annotations
@@ -16,9 +18,10 @@ from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from ..domain.world import ROLES, World
+from ..domain.world import World
 from ..tools.context import TurnContext
 from ..tools.toolsets import TOOLSETS
+from .types import PROMPTS_V1, agent_type
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
 
@@ -48,38 +51,59 @@ def _route_table(scenario: dict) -> str:
     return "\n".join(lines)
 
 
-def render_prompt(role: str, scenario: dict) -> str:
-    """The system prompt for a role: role text plus the shared simulation protocol."""
-    text = (PROMPT_DIR / f"{role.lower()}.md").read_text(encoding="utf-8")
+def render_prompt(role: str, scenario: dict, prompts: dict[str, str] | None = None) -> str:
+    """
+    The system prompt for a role: role text plus the shared simulation protocol.
+    ``role`` is a role id (``loadmaster``); a standard callsign (``LOADMASTER``)
+    also works.
+    """
+    filename = (prompts or PROMPTS_V1).get(role) or f"{role.lower()}.md"
+    text = (PROMPT_DIR / filename).read_text(encoding="utf-8")
     text = text.replace("{{ROUTE_TABLE}}", _route_table(scenario))
     return text.rstrip() + "\n" + (PROMPT_DIR / "_protocol.md").read_text(encoding="utf-8")
 
 
-def resolve_models(models: Any = None) -> dict[str, BaseChatModel]:
-    """
-    Turn a model spec into one chat model per role.
+def _seats(scenario: dict, roster: list[dict] | None) -> list[dict]:
+    return roster if roster is not None else list(scenario["order"]["roster"])
 
-    ``models`` may be None (read AIRDROP_MODEL / AIRDROP_MODEL_<ROLE> from the
-    environment), a model string, a chat model, or a dict of role -> either.
+
+def resolve_models(models: Any = None, seats: list[dict] | None = None) -> dict[str, BaseChatModel]:
     """
+    One chat model per seat, keyed by callsign.
+
+    ``models`` may be None (environment: AIRDROP_MODEL_<CALLSIGN>, then
+    AIRDROP_MODEL, then the agent type's model), a model string, a chat model,
+    or a dict keyed by callsign (or "default").
+    """
+    seats = seats if seats is not None else [{"callsign": c, "agent_id": f"GeneralistV1.Instance{i}"}
+                                             for i, c in enumerate(["COMMANDER", "COPILOT", "NAVIGATOR",
+                                                                    "LOADMASTER", "ATC"], start=1)]
+
     def one(spec: Any) -> BaseChatModel:
         if isinstance(spec, BaseChatModel):
             return spec
         return init_chat_model(str(spec), max_tokens=4096)
 
+    def type_model(seat: dict) -> str:
+        try:
+            return agent_type(seat["agent_id"]).model or DEFAULT_MODEL
+        except ValueError:
+            return DEFAULT_MODEL
+
     if isinstance(models, dict):
         default = models.get("default")
-        return {role: one(models.get(role) or default or os.environ.get("AIRDROP_MODEL", DEFAULT_MODEL))
-                for role in ROLES}
+        return {seat["callsign"]: one(models.get(seat["callsign"]) or default
+                                      or os.environ.get("AIRDROP_MODEL", type_model(seat)))
+                for seat in seats}
     if models is not None:
         shared = one(models)
-        return {role: shared for role in ROLES}
-    base = os.environ.get("AIRDROP_MODEL", DEFAULT_MODEL)
+        return {seat["callsign"]: shared for seat in seats}
     cache: dict[str, BaseChatModel] = {}
     out = {}
-    for role in ROLES:
-        spec = os.environ.get(f"AIRDROP_MODEL_{role}", base)
-        out[role] = cache.setdefault(spec, one(spec))
+    for seat in seats:
+        key = seat["callsign"].replace(" ", "_")
+        spec = os.environ.get(f"AIRDROP_MODEL_{key}") or os.environ.get("AIRDROP_MODEL") or type_model(seat)
+        out[seat["callsign"]] = cache.setdefault(spec, one(spec))
     return out
 
 
@@ -96,20 +120,28 @@ def _middleware(model: BaseChatModel, max_model_calls: int) -> list:
     return middleware
 
 
-def build_crew(scenario: dict, models: Any = None) -> dict[str, Any]:
-    """Build callsign -> agent for a scenario."""
-    resolved = resolve_models(models)
+def build_crew(scenario: dict, models: Any = None, roster: list[dict] | None = None) -> dict[str, Any]:
+    """Build callsign -> agent, one per seat of ``roster`` (default: the seats as ordered)."""
+    seats = _seats(scenario, roster)
+    resolved = resolve_models(models, seats)
     limit = int(scenario["settings"].get("max_model_calls_per_turn", 20))
     crew = {}
-    for role in ROLES:
-        crew[role] = create_agent(
-            resolved[role],
+    for seat in seats:
+        callsign, role = seat["callsign"], seat["role"]
+        if role not in TOOLSETS:
+            raise ValueError(f"{callsign}: no tool set for role {role!r}; known: {', '.join(TOOLSETS)}")
+        try:
+            prompts = agent_type(seat["agent_id"]).prompts or PROMPTS_V1
+        except ValueError:
+            prompts = PROMPTS_V1
+        crew[callsign] = create_agent(
+            resolved[callsign],
             tools=TOOLSETS[role],
-            system_prompt=render_prompt(role, scenario),
+            system_prompt=render_prompt(role, scenario, prompts),
             context_schema=TurnContext,
-            middleware=_middleware(resolved[role], limit),
+            middleware=_middleware(resolved[callsign], limit),
             checkpointer=False,  # the mission graph checkpoints whole turns
-            name=role.lower(),
+            name=callsign.lower().replace(" ", "_"),
         )
     return crew
 

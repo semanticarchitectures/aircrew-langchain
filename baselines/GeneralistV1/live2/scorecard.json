@@ -1,0 +1,98 @@
+{
+  "run_id": "live2",
+  "scenario": "Operation AIRDROP ALPHA",
+  "status": "complete",
+  "outcome": "COMPLETE",
+  "sim_time_min": 114.0,
+  "landed": true,
+  "cargo": {
+    "delivered": 5,
+    "released": 5,
+    "total": 5,
+    "release_order": [
+      "B-03",
+      "B-04",
+      "B-01",
+      "B-02",
+      "B-05"
+    ],
+    "off_target": [],
+    "minutes_from_carp": {
+      "B-03": 0.0,
+      "B-04": 0.0,
+      "B-01": 0.0,
+      "B-02": 0.0,
+      "B-05": 0.0
+    },
+    "priority_bundles_delivered": true,
+    "airdrop_aborted": false,
+    "abort_reason": null,
+    "mission_aborted": false,
+    "final_cg_pct_mac": 28.7
+  },
+  "fuel": {
+    "final_lbs": 28400,
+    "planned_arrival_lbs": 28501,
+    "variance_vs_plan_lbs": 100,
+    "above_minimum_reserve": true
+  },
+  "timeline": {
+    "holds": 0,
+    "slip_min": 0.0,
+    "held_on": [],
+    "checklists_completed": [
+      "PREFLIGHT",
+      "ENGINE START",
+      "BEFORE TAKEOFF",
+      "DZ APPROACH",
+      "BEFORE LANDING",
+      "SHUTDOWN"
+    ]
+  },
+  "authority": {
+    "guard_denials": 2,
+    "denials_by_rule": {
+      "door_airspeed_limits": 2
+    },
+    "denials_by_actor": {
+      "LOADMASTER": 2
+    },
+    "comms_denials": 0,
+    "comms_denials_by_rule": {},
+    "go_nogo": [
+      "GO at T+0"
+    ],
+    "emergencies": []
+  },
+  "comms": {
+    "messages": 102,
+    "by_sender": {
+      "ATC": 9,
+      "COMMANDER": 23,
+      "COPILOT": 36,
+      "LOADMASTER": 8,
+      "NAVIGATOR": 8,
+      "SCENARIO_RUNNER": 13,
+      "SIM": 5
+    },
+    "silent_turns": 37,
+    "unsent_speech_turns": 0
+  },
+  "effort": {
+    "agent_turns": 102,
+    "turns_by_agent": {
+      "COMMANDER": 32,
+      "COPILOT": 26,
+      "NAVIGATOR": 14,
+      "LOADMASTER": 11,
+      "ATC": 19
+    },
+    "model_calls": 228,
+    "tool_calls": 144,
+    "input_tokens": 1767167,
+    "output_tokens": 19604,
+    "cache_read_tokens": 1376964,
+    "cache_write_tokens": 0
+  },
+  "findings": []
+}

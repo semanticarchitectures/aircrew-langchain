@@ -1,15 +1,20 @@
 # Design decisions and development plan
 
-**Status:** v0.1, 2026-10-04. Proposed. Section 2 records decisions Kevin made in
-the design discussion of 2026-10-04. Section 3 records positions Claude proposed
-that were not objected to but not explicitly confirmed. Section 6 lists what is
-still open. Nothing in Sections 4 and 5 is built yet.
+**Status:** v0.2, 2026-11-06. Section 2 records decisions Kevin made in the
+design discussion of 2026-10-04. Section 3 records positions Claude proposed that
+were not objected to but not explicitly confirmed. Section 6 lists what is still
+open. Phases 0 and 1 are built (branch `phase-1/mission-order`); Section 5 says
+what each delivered and what was decided while building it. Phases 2 to 5 are not
+built.
+
+This repository is a component of the Acquisition Knowledge System. Its Phases
+1 and 2 gate AKS milestone D1, and Phases 3 to 5 gate D2.
 
 ## 1. Where the project stands
 
 The LangGraph rebuild works end to end: a governed envelope (the graph owns the
 clock, turn order, timeline gates and authority checks) around five agents that
-decide what to say and do. 88 tests pass. Two live runs exist on Claude Sonnet 4.6:
+decide what to say and do. 108 tests pass. Two live runs exist on Claude Sonnet 4.6:
 
 | Run | Result | Turns | Input tokens | Cost |
 |---|---|---|---|---|
@@ -54,10 +59,12 @@ Three measured facts from live2 drive this plan:
 8. **The id names a configuration.** Ids persist across runs so that different
    configurations (model version, context management) can be compared across
    simulations.
-9. **Id form.** `Type.VersionX.InstanceN`, for example `Loadmaster.v4.01`.
-   Role-specific agent types have processing and context optimized for a role,
-   and several instances of one version can run in a large simulation. A general
-   capability set assigned to a role is also a valid type.
+9. **Id form.** `<Type>V<version>.Instance<n>`, for example
+   `LoadMasterV4.Instance2`: Kevin's "LoadMasterVersionX.InstanceN", and the form
+   the AKS `decision-traces` spec uses for `decidedBy`. Role-specific agent types
+   have processing and context optimized for a role, and several instances of one
+   version can run in a large simulation. A general capability set assigned to a
+   role is also a valid type.
 
 ### Authorization
 
@@ -110,11 +117,14 @@ Three measured facts from live2 drive this plan:
 
 ### 4.1 Mission order
 
-One file per mission, readable by agents: roster (id, role, callsign, duty
-position), nets (control station, members), route, cargo, timeline. Validated
-before a run against a pinned snapshot of ENSIM's operating model: every role
-must exist, every net member's role must have a link to that system, every agent
-type must be qualified for its role.
+Built in Phase 1; the format is in [`mission-order.md`](mission-order.md). One
+file per mission, readable by agents: roster (id, role, callsign, duty
+position), nets (control station, members), route, cargo, planned times.
+Validated before a run against a pinned snapshot of ENSIM's operating model plus
+a local supplement: every role must exist, every net member's role must have a
+link to that system, every agent type must be qualified for its role. What
+passes only because of the supplement is listed as representative in the
+validated order and in every scorecard.
 
 ### 4.2 Authorization
 
@@ -155,11 +165,13 @@ Each phase ends with a gate that must pass before the next begins. Phases 1 to 4
 are built on the existing scenario, because that is where a baseline exists.
 Mission 1 follows in Phase 5 (see open item 5).
 
-**Phase 0. Baseline.** Done on 2026-10-05: the Mac copy is up to date
-(cache-counter fix, live2 logs) and the project is under version control at
-`semanticarchitectures/Aircrew-LangChain`. Remaining: record live2 as the
-baseline configuration, `Generalist.v1` in every seat.
-*Gate:* all tests pass on the Mac copy; the baseline record exists.
+**Phase 0. Baseline.** Done. On 2026-10-05 the Mac copy was brought up to date
+and the project put under version control at
+`semanticarchitectures/Aircrew-LangChain`. On 2026-11-06 live2 was recorded as
+the baseline of configuration `GeneralistV1` in every seat:
+`baselines/GeneralistV1/live2/` holds its scorecard, messages, events and a
+`baseline.json` with the roster, the configuration fingerprint and the caveats.
+*Gate:* all tests pass; the baseline record exists. Passed.
 
 **Phase 1. Mission order and identity.** Mission-order schema and loader. Split
 the current scenario into order and scenario. Build the graph from the roster.
@@ -169,6 +181,64 @@ ENSIM snapshot.
 *Gate:* the existing mission runs from an order with unchanged scripted
 scorecards; a run with two loadmaster instances works; an invalid order is
 rejected with the reason.
+
+*Built (2026-11-06, branch `phase-1/mission-order`).* Gate passed:
+
+- Unchanged scorecards: the five scripted cases (nominal, abort, rogue, eager,
+  party line) give scorecards identical to Phase 0, except for the new
+  `roster` section. Their message logs, events and agent memories were also
+  compared and are identical apart from the added identity fields. The Phase 0
+  scorecards are kept in `tests/fixtures/phase0/` and checked by a test.
+- Two loadmasters: `scenarios/airdrop_alpha_two_loadmasters.order.yaml` adds
+  `LOAD 2`. The scripted mission completes with 5 of 5 delivered; history, fork
+  and injects to `LOAD 2` work.
+- Invalid orders are rejected with every reason at once (`OrderError.problems`).
+
+Decided while building, within the decisions above:
+
+- **Graph nodes, inboxes and agent memory are keyed by callsign, one per seat.**
+  The agent id is attached wherever something is attributed: world actions
+  (`agent_id` and `role` in every journal entry), messages (`sender_id`), turns,
+  LangSmith metadata, and the run's roster. Swapping the agent in a seat therefore
+  changes no routing, and saved runs stay readable.
+- **Authority is keyed by role.** `PERMISSIONS` and the gate owners in
+  `CONDITIONS` name role ids. The world resolves an actor's agent id to its seat
+  and role; the graph binds the id, so a model cannot choose it.
+- **Role ids are ENSIM's.** `aircraft-commander`, `copilot`, `loadmaster` and
+  `air-traffic-controller` exist in ENSIM at `aa7b714`. `navigator` does not, so
+  it is defined in `operating_model/local.yaml` and reported as representative.
+  So are three communication links ENSIM lacks (copilot on the intercom and the
+  radio, navigator on the intercom).
+- **The order is this project's format.** ENSIM's step 6 artifact ("Mission
+  tasking") has a name and no content, so ENSIM does not emit orders yet. The
+  format is offered as input to the AKS simulation-interface decision due
+  2027-01-31.
+- **A scripted crew is recorded as what flew.** `--crew scripted` turns
+  `GeneralistV1.Instance4` into `ScriptedNominalV1.Instance4` and records the id
+  it was ordered as. A model given on the command line or in the environment is
+  recorded as an override of the type's model.
+- **`GeneralistV1` is fingerprinted.** A hash of its prompt templates, tool
+  schemas, model and middleware is pinned in `agents/types.py` and checked by a
+  test. The same hash comes out of `d320516`, the code live2 flew, so the
+  baseline describes this configuration. Editing a prompt or a tool description
+  fails the test until a new version is added.
+- **Forks may change the crew; resumes may not.** A fork rebinds the seats and
+  records a `crew_bound` event, which is how one configuration will be compared
+  with another from the same checkpoint. Resuming a run with a different crew is
+  refused.
+- **live1 is not a `GeneralistV1` result.** It flew before the drop-accuracy
+  change altered what two tools return.
+
+Known limits, carried to later phases:
+
+- `GeneralistV1`'s prompts and tool descriptions name the standard callsigns. An
+  order with other callsigns runs, but its agents are told the old names. A
+  roster-aware prompt set is a new type version.
+- Standard calls addressed to a role go to the first seat holding it (the
+  loadmaster's door and drop authorizations go to `LOADMASTER`, not `LOAD 2`).
+  Duty positions are recorded but do not yet change who receives what.
+- Grants are not yet reassignable, and roles are not yet linked to the systems
+  they operate. Both are Phase 2.
 
 **Phase 2. Authorization.** Grant model and the three checks. Action to system
 to role. All crew tools visible to all crew agents; current grants shown each
@@ -214,6 +284,18 @@ fraction of a full run. Estimate: $40 to $60 through Phase 4. Phase 5 is not
 estimated, since it has more agents and a longer timeline.
 
 ## 6. Open decisions
+
+Raised by Phase 1:
+
+- **Where mission orders come from.** The AKS integrated plan says Phases 1 and 2
+  take mission orders from ENSIM. ENSIM does not emit them yet, so orders are
+  written in this repository's format and checked against ENSIM's records. Who
+  produces orders after the simulation-interface decision is open.
+- **ENSIM's NOTICE file** still has its placeholder copyright line
+  ("[YEAR] [YOUR NAME OR ORGANIZATION]"). The snapshot copies it unchanged; the
+  fix belongs in ENSIM.
+
+From the design discussion:
 
 1. **Example sign-off.** A person approves each example, or machine checks alone.
    Proposed: a person, since live2 passed the scorecard with false calls in it.

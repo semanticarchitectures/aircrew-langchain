@@ -1,0 +1,155 @@
+[
+  {
+    "id": "indopacom",
+    "name": "United States Indo-Pacific Command",
+    "shortName": "INDOPACOM",
+    "type": "CombatantCommand",
+    "echelon": "Combatant Command",
+    "parentId": null,
+    "description": "Geographic combatant command; stands up a Joint Task Force in response to a validated HA/DR requirement in its area of responsibility.",
+    "doctrineSource": [
+      { "publication": "DoDD 5100.46", "section": "DoD Support to Foreign Disaster Relief" }
+    ]
+  },
+  {
+    "id": "pacaf",
+    "name": "Pacific Air Forces",
+    "shortName": "PACAF",
+    "type": "MAJCOM",
+    "echelon": "Command",
+    "parentId": null,
+    "homeStation": "Joint Base Pearl Harbor-Hickam, HI",
+    "doctrineSource": [
+      { "publication": "AFDP 3-0.1", "note": "Command and Control, formerly AFDP 3-30." }
+    ]
+  },
+  {
+    "id": "pacaf-theater-aoc",
+    "name": "PACAF Theater Air Operations Center",
+    "shortName": "PACAF AOC",
+    "type": "OperationsCenter",
+    "echelon": "Operational-level C2 center",
+    "parentId": "pacaf",
+    "homeStation": "Joint Base Pearl Harbor-Hickam, HI",
+    "description": "Produces the daily Air Tasking Order (ATO) for the PACAF/INDOPACOM area of responsibility.",
+    "doctrineSource": [
+      { "publication": "AFDP 3-0.1", "note": "The AOC construct itself is confirmed doctrine. The specific numbered-AOC designation for PACAF (e.g., 613 AOC) was NOT independently verified during this research pass — confirm the exact unit number before treating it as fact, and update this record's name/shortName accordingly." },
+      { "publication": "AFMAN 13-1AOC Vol 3", "section": "25 Jun 2024 edition, §2.3; no releasability restrictions", "url": "https://static.e-publishing.af.mil/production/1/af_a3/publication/afman13-1aocv3/afman13-1aocv3_.pdf", "note": "Fetched and read directly in this session on 2026-09-05. Confirms the generic internal AOC division structure (Strategy, Combat Plans, Combat Operations, ISR, and Air Mobility Divisions — see the five new c2nodes.json records) — this applies AOC/OC-wide per the manual, it is NOT PACAF-specific. The specific PACAF numbered-AOC designation (e.g., 613 AOC) is still unverified; everything else about this record's internal structure is now grounded." }
+    ]
+  },
+  {
+    "id": "amc",
+    "name": "Air Mobility Command",
+    "shortName": "AMC",
+    "type": "MAJCOM",
+    "echelon": "Command",
+    "parentId": null,
+    "homeStation": "Scott AFB, IL",
+    "doctrineSource": [
+      { "publication": "JP 3-17", "section": "Air Mobility Operations" }
+    ]
+  },
+  {
+    "id": "amc-618-aoc-tacc",
+    "name": "618th Air Operations Center (Tanker Airlift Control Center)",
+    "shortName": "618 AOC/TACC",
+    "type": "OperationsCenter",
+    "echelon": "Operational-level C2 center",
+    "parentId": "amc",
+    "homeStation": "Scott AFB, IL",
+    "description": "AMC's sole AOC; 24/7 execution node tasking specific tail numbers/crews for global mobility missions.",
+    "doctrineSource": [
+      { "publication": "JP 3-17" },
+      { "publication": "618th Air Operations Center Fact Sheet", "url": "https://www.amc.af.mil/About-Us/Fact-Sheets/Display/Article/1517680/618th-air-operations-center/" }
+    ]
+  },
+  {
+    "id": "15th-wing",
+    "name": "15th Wing",
+    "shortName": "15 WG",
+    "type": "Wing",
+    "echelon": "Wing",
+    "parentId": "pacaf",
+    "homeStation": "Joint Base Pearl Harbor-Hickam, HI",
+    "doctrineSource": [
+      { "publication": "15th Wing public unit reference" }
+    ]
+  },
+  {
+    "id": "535th-airlift-squadron",
+    "name": "535th Airlift Squadron",
+    "shortName": "535 AS",
+    "type": "Squadron",
+    "echelon": "Squadron",
+    "parentId": "15th-wing",
+    "homeStation": "Joint Base Pearl Harbor-Hickam, HI",
+    "description": "Only active-duty C-17 squadron in Hawaii; performs humanitarian airlift and airdrop for the Indo-Pacific.",
+    "doctrineSource": [
+      { "publication": "535th Airlift Squadron public unit reference" }
+    ]
+  },
+  {
+    "id": "ustranscom",
+    "name": "United States Transportation Command",
+    "shortName": "USTRANSCOM",
+    "type": "CombatantCommand",
+    "echelon": "Combatant Command",
+    "parentId": null,
+    "homeStation": "Scott AFB, IL",
+    "description": "Functional combatant command with global oversight of patient movement, including the Theater Patient Movement Requirements Center (TPMRC) network that validates and regulates aeromedical evacuation requirements.",
+    "doctrineSource": [
+      {
+        "publication": "\"USTRANSCOM oversees strategic theater patient movement\" / \"USTRANSCOM coordinates theater patient movement, critical part of aeromedical evacuation process\"",
+        "note": "Confirmed via web search on 2026-09-09 (two corroborating Army.mil articles plus DVIDS coverage, all describing USTRANSCOM's oversight of the Patient Movement Requirement Center (PMRC)/TPMRC/JPMRC system). A direct fetch of the primary Army.mil article returned an HTTP 429 rate-limit from this session's environment rather than succeeding — grounded via WebSearch synthesis instead, consistent with this dataset's citation-honesty pattern for sources that could not be directly fetched."
+      }
+    ]
+  },
+  {
+    "id": "18th-aeromedical-evacuation-squadron",
+    "name": "18th Aeromedical Evacuation Squadron",
+    "shortName": "18 AES",
+    "type": "Squadron",
+    "echelon": "Squadron",
+    "parentId": "pacaf",
+    "homeStation": "Kadena Air Base, Japan",
+    "description": "The sole aeromedical evacuation unit in U.S. Indo-Pacific Command; provides 24/7 patient movement capability across the theater, picking up patients and transporting them to higher levels of care. AE crews fly aboard whichever airlift airframe is tasked for the mission (C-130, KC-135, or — as in this mission — a tasked C-17), rather than operating dedicated aircraft.",
+    "doctrineSource": [
+      {
+        "publication": "PACAF / Yokota AB / DVIDS public affairs coverage of 18th Aeromedical Evacuation Squadron operations",
+        "note": "Confirmed via web search on 2026-09-09 (pacaf.af.mil, yokota.af.mil, dvidshub.net, and Wikipedia's List of United States Air Force aeromedical evacuation squadrons all corroborate: 18 AES at Kadena AB, sole AE unit in INDOPACOM). The specific intermediate wing this squadron reports to (rather than PACAF directly) was not independently verified this session — parentId is set to pacaf as a doctrinally reasonable simplification, same pattern as this dataset's other organizationId placements flagged as unverified at the intermediate echelon."
+      }
+    ]
+  },
+  {
+    "id": "557th-weather-wing",
+    "name": "557th Weather Wing",
+    "shortName": "557 WW",
+    "type": "Wing",
+    "echelon": "Wing",
+    "parentId": null,
+    "homeStation": "Offutt Air Force Base, NE",
+    "description": "The Air Force's single weather wing, providing centralized global weather production and situational awareness to the Air Force, Army, joint warfighters, combatant commands, the intelligence community, and the Secretary of Defense. Parents the Operational Weather Squadron (OWS) network, including the 17th OWS that supports PACAF.",
+    "doctrineSource": [
+      {
+        "publication": "557th Weather Wing public unit reference (557weatherwing.af.mil, offutt.af.mil, 16af.af.mil)",
+        "note": "Confirmed via web search on 2026-09-09. This record's parentId is left null (top-level) as a simplification — 557 WW's real parent chain (16th Air Force / Air Combat Command) is not modeled in this dataset, same pattern as other MAJCOM/wing-level organizations added without their full parent chain (e.g. amc, indopacom)."
+      }
+    ]
+  },
+  {
+    "id": "17th-operational-weather-squadron",
+    "name": "17th Operational Weather Squadron",
+    "shortName": "17 OWS",
+    "type": "Squadron",
+    "echelon": "Squadron",
+    "parentId": "557th-weather-wing",
+    "homeStation": "Joint Base Pearl Harbor-Hickam, HI",
+    "description": "Produces and disseminates mission planning and execution weather analyses, forecasts, and briefings across the Pacific theater (~110 million square miles) for PACAF, USARPAC, SOCPAC, NAVPAC, and USFK, covering 115+ installations/sites. Co-located with the 15th Wing and 535th Airlift Squadron at Hickam, the same departure airfield as Missions 1-3.",
+    "doctrineSource": [
+      {
+        "publication": "17th Operational Weather Squadron public unit reference (Wikipedia, usafunithistory.com)",
+        "note": "Confirmed via web search on 2026-09-09: 17 OWS is based at Hickam AFB and explicitly supports PACAF among other Pacific-theater commands — a strong, real fit for this dataset's Hickam-based mission set. Historically assigned to the Air Force Weather Agency (AFWA)/502nd Air Operations Group; AFWA was reorganized into the 557th Weather Wing construct af-wide circa the mid-2010s, but this squadron's exact current parent alignment under 557 WW was not independently confirmed this session — parentId is set to 557th-weather-wing as a doctrinally reasonable simplification, consistent with this dataset's other unverified intermediate-echelon placements."
+      }
+    ]
+  }
+]
